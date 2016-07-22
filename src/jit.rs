@@ -55,7 +55,7 @@ use raw::*;
 use std::os::raw::c_void;
 use std::mem;
 pub use compile::Compile;
-pub use context::Context;
+pub use context::{Context, ContextMember};
 pub use elf::*;
 pub use function::{flags, Abi, UncompiledFunction, Func, CompiledFunction};
 pub use function::flags::CallFlags;

@@ -1,5 +1,5 @@
 use raw::*;
-use context::Context;
+use context::{Context, ContextMember};
 use compile::Compile;
 use label::Label;
 use types::Ty;
@@ -58,11 +58,12 @@ std::os::raw::c_int;
 /// A function
 pub struct Func(PhantomData<[()]>);
 native_ref!(&Func = jit_function_t);
-impl Func {
-    /// Get the context this function is contained in
-    pub fn get_context(&self) -> &Context<()> {
+impl ContextMember for Func {
+    fn context(&self) -> &Context {
         unsafe { jit_function_get_context(self.into()).into() }
     }
+}
+impl Func {
     /// Check if the given function has been compiled
     pub fn is_compiled(&self) -> bool {
         unsafe { jit_function_is_compiled(self.into()) != 0 }

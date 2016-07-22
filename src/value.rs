@@ -1,7 +1,7 @@
 use raw::*;
 use function::UncompiledFunction;
 use types::*;
-use context::Context;
+use context::{Context, ContextMember};
 use std::marker::PhantomData;
 use std::fmt;
 use std::ops::*;
@@ -18,6 +18,12 @@ impl fmt::Debug for Val {
         write!(fmt, "v({:?})", self.get_type())
     }
 }
+impl ContextMember for Val {
+    /// Get the context this value is contained in
+    fn context(&self) -> &Context<()> {
+        unsafe { jit_value_get_context(self.into()).into() }
+    }
+}
 impl Val {
     #[inline(always)]
     /// Create a new value in the context of a function's current block.
@@ -29,10 +35,6 @@ impl Val {
         unsafe {
             jit_value_create(func.into(), value_type.into()).into()
         }
-    }
-    /// Get the context this value is contained in
-    pub fn get_context(&self) -> &Context<()> {
-        unsafe { jit_value_get_context(self.into()).into() }
     }
     /// Get the type of the value
     pub fn get_type(&self) -> &Ty {

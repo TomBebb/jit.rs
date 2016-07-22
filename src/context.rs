@@ -123,3 +123,9 @@ impl<'a> Iterator for Functions<'a> {
         }
     }
 }
+
+/// An interface to be implemented by all structs that are members of a `Context`.
+pub trait ContextMember {
+    /// Get the context that this is a member of.
+    fn context(&self) -> &Context;
+}

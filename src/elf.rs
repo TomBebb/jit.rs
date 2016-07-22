@@ -69,12 +69,12 @@ pub enum ReadElfErrorCode {
     /// The ELF is too big to be loaded
     Memory
 }
-impl fmt::Debug for ReadElfErrorCode {
+impl fmt::Display for ReadElfErrorCode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}", self.description())
     }
 }
-impl fmt::Display for ReadElfErrorCode {
+impl fmt::Debug for ReadElfErrorCode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "{}", self.description())
     }
@@ -96,9 +96,9 @@ pub struct ReadElfError<'a> {
     filename: &'a str,
     error: ReadElfErrorCode
 }
-impl<'a> fmt::Display for ReadElfError<'a> {
+impl<'a> fmt::Debug for ReadElfError<'a> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "'{}': {}", self.filename, self.error.description())
+        write!(fmt, "'{}': {}", self.filename, self.error)
     }
 }
 impl ReadElf {
