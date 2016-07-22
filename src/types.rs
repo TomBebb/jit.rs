@@ -1,19 +1,21 @@
 use raw::*;
 use compile::Compile;
 use function::Abi;
-use libc::{c_char, c_uint, c_void};
+use 
+std::os::raw::{c_char, c_uint, c_void};
 use util::{from_ptr, from_ptr_opt};
 use std::borrow::*;
 use std::marker::PhantomData;
 use std::{fmt, mem, str};
 use std::iter::IntoIterator;
 use std::ffi::{self, CString};
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 pub use kind::TypeKind;
 /// The integer representation of a type
 pub mod kind {
-    use libc::c_int;
+    use 
+std::os::raw::c_int;
     bitflags!(
         pub flags TypeKind: c_int {
             const Void = 0,
@@ -319,7 +321,7 @@ impl Clone for Type {
     /// Make a copy of the type descriptor by increasing its reference count.
     fn clone(&self) -> Type {
         unsafe {
-            from_ptr(jit_type_copy((&**self).into()))
+            jit_type_copy((&**self).into()).into()
         }
     }
 }
@@ -335,16 +337,7 @@ impl Drop for Type {
 impl<'a> Deref for Type {
     type Target = Ty;
     fn deref(&self) -> &Ty {
-        unsafe {
-            mem::transmute(self._type)
-        }
-    }
-}
-impl<'a> DerefMut for Type {
-    fn deref_mut(&mut self) -> &mut Ty {
-        unsafe {
-            mem::transmute(self._type)
-        }
+        self._type.into()
     }
 }
 /// A copy-on-write type
@@ -367,7 +360,7 @@ impl Type {
         unsafe {
             let mut params:&mut [jit_type_t] = mem::transmute(params);
             let signature = jit_type_create_signature(abi as jit_abi_t, return_type.into(), params.as_mut_ptr(), params.len() as c_uint, 1);
-            from_ptr(signature)
+            signature.into()
         }
     }
     #[inline(always)]
@@ -375,7 +368,7 @@ impl Type {
     pub fn new_struct(fields: &mut [&Ty]) -> Type {
         unsafe {
             let fields:&mut [jit_type_t] = mem::transmute(fields);
-            from_ptr(jit_type_create_struct(fields.as_mut_ptr(), fields.len() as c_uint, 1))
+            jit_type_create_struct(fields.as_mut_ptr(), fields.len() as c_uint, 1).into()
         }
     }
     #[inline(always)]
@@ -383,15 +376,14 @@ impl Type {
     pub fn new_union(fields: &mut [&Ty]) -> Type {
         unsafe {
             let fields:&mut [jit_type_t] = mem::transmute(fields);
-            from_ptr(jit_type_create_union(fields.as_mut_ptr(), fields.len() as c_uint, 1))
+            jit_type_create_union(fields.as_mut_ptr(), fields.len() as c_uint, 1).into()
         }
     }
     #[inline(always)]
     /// Create a type descriptor for a pointer to another type.
     pub fn new_pointer(pointee: &Ty) -> Type {
         unsafe {
-            let ptr = jit_type_create_pointer(pointee.into(), 1);
-            from_ptr(ptr)
+            jit_type_create_pointer(pointee.into(), 1).into()
         }
     }
 }
@@ -622,7 +614,7 @@ impl<T> TaggedType<T> {
             let free_data:extern fn(*mut c_void) = ::free_data::<T>;
             let ty = jit_type_create_tagged(ty.into(), kind.bits(), mem::transmute(&*data), Some(free_data), 1);
             mem::forget(data);
-            from_ptr(ty)
+            ty.into()
         }
     }
     /// Get the data this is tagged to
@@ -634,7 +626,7 @@ impl<T> TaggedType<T> {
     /// Get the type this is tagged to
     pub fn get_tagged_type(&self) -> &Ty {
         unsafe {
-            from_ptr(jit_type_get_tagged_type(self.into()))
+            jit_type_get_tagged_type(self.into()).into()
         }
     }
     /// Change the data this is tagged to
@@ -660,9 +652,7 @@ impl<T> Drop for TaggedType<T> {
 impl<T> Deref for TaggedType<T> {
     type Target = Ty;
     fn deref(&self) -> &Ty {
-        unsafe {
-            mem::transmute(self._type)
-        }
+        self._type.into()
     }
 }
 #[inline(always)]

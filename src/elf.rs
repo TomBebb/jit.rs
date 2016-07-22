@@ -2,7 +2,8 @@ use raw::*;
 use context::Context;
 use function::CompiledFunction;
 use util::from_ptr;
-use libc::{c_uint, c_char};
+use 
+std::os::raw::{c_uint, c_char};
 use std::ffi::{self, CString};
 use std::{fmt, str};
 use std::marker::PhantomData;

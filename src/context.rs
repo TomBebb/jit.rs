@@ -1,10 +1,11 @@
 use raw::*;
 use function::Func;
-use util::{oom, from_ptr, from_ptr_opt};
+use util::{oom, from_ptr_opt};
+use std::default::Default;
 use std::marker::PhantomData;
 use std::{mem, ptr};
 use std::ops::{Index, IndexMut};
-use std::iter::IntoIterator;
+use cbox::{CBox, DisposeRef};
 /// Holds all of the functions you have built and compiled. There can be
 /// multiple, but normally there is only one.
 ///
@@ -29,10 +30,29 @@ use std::iter::IntoIterator;
 /// assert_eq!(ctx[1], 21);
 /// ```
 pub struct Context<T = ()> {
-    _context: jit_context_t,
-    marker: PhantomData<T>
+    _marker: PhantomData<T>
 }
-native_ref!(Context<T>, _context: jit_context_t, marker = PhantomData);
+impl<'a, T> Into<jit_context_t> for &'a Context<T> {
+    fn into(self) -> jit_context_t {
+        unsafe { mem::transmute(self) }
+    }
+}
+impl<'a, T> Into<jit_context_t> for &'a mut Context<T> {
+    fn into(self) -> jit_context_t {
+        unsafe { mem::transmute(self) }
+    }
+}
+impl<'a, T> From<jit_context_t> for &'a Context<T> {
+    fn from(ty: jit_context_t) -> &'a Context<T> {
+        unsafe { mem::transmute(ty) }
+    }
+}
+impl<T> DisposeRef for Context<T> {
+    type RefTo = Struct__jit_context;
+    unsafe fn dispose(c: jit_context_t) {
+        jit_context_destroy(c);
+    }
+}
 
 impl<T> Index<i32> for Context<T> {
     type Output = T;
@@ -46,12 +66,12 @@ impl<T> Index<i32> for Context<T> {
         }
     }
 }
-impl<T> IndexMut<i32> for Context<T> {
+impl<T> IndexMut<i32> for Context<T> where T: Default {
     fn index_mut(&mut self, index: i32) -> &mut T {
         unsafe {
             let meta = jit_context_get_meta(self.into(), index);
             if meta.is_null() {
-                let boxed = Box::new(mem::uninitialized::<T>());
+                let boxed = Box::new(T::default());
                 if jit_context_set_meta(self.into(), index, mem::transmute(boxed), Some(::free_data::<T>)) == 0 {
                     oom()
                 } else {
@@ -66,9 +86,9 @@ impl<T> IndexMut<i32> for Context<T> {
 impl<T> Context<T> {
     #[inline(always)]
     /// Create a new JIT Context
-    pub fn new() -> Context<T> {
+    pub fn new() -> CBox<Context<T>> {
         unsafe {
-            from_ptr(jit_context_create())
+            CBox::new(jit_context_create())
         }
     }
     /// Iterate through the functions contained inside this context
@@ -78,13 +98,6 @@ impl<T> Context<T> {
             last: ptr::null_mut(),
             lifetime: PhantomData,
         }
-    }
-}
-impl<'a, T> IntoIterator for &'a Context<T> {
-    type IntoIter = Functions<'a>;
-    type Item = &'a Func;
-    fn into_iter(self) -> Functions<'a> {
-        self.functions()
     }
 }
 impl<T> Drop for Context<T> {

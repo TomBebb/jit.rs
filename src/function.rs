@@ -6,7 +6,8 @@ use types::Ty;
 use insn::Block;
 use value::Val;
 use util::{self, from_ptr, from_ptr_opt, from_ptr_oom};
-use libc::{
+use 
+std::os::raw::{
     c_char,
     c_int,
     c_uint,
@@ -40,7 +41,8 @@ impl Default for Abi {
 }
 /// Call flags to a function
 pub mod flags {
-    use libc::c_int;
+    use 
+std::os::raw::c_int;
     /// Call flags to a function
     bitflags!(
         pub flags CallFlags: c_int {

@@ -1,7 +1,6 @@
 use raw::*;
 use function::UncompiledFunction;
 use types::*;
-use util::from_ptr;
 use std::marker::PhantomData;
 use std::fmt;
 use std::ops::*;
@@ -27,19 +26,19 @@ impl Val {
     /// from a different block.
     pub fn new<'a>(func:&UncompiledFunction<'a>, value_type:&Ty) -> &'a Val {
         unsafe {
-            from_ptr(jit_value_create(func.into(), value_type.into()))
+            jit_value_create(func.into(), value_type.into()).into()
         }
     }
     /// Get the type of the value
     pub fn get_type(&self) -> &Ty {
         unsafe {
-            from_ptr(jit_value_get_type(self.into()))
+            jit_value_get_type(self.into()).into()
         }
     }
     /// Get the function which made this value
     pub fn get_function(&self) -> UncompiledFunction {
         unsafe {
-            from_ptr(jit_value_get_function(self.into()))
+            jit_value_get_function(self.into()).into()
         }
     }
     /// Determine if a value is temporary.  i.e. its scope extends over a single

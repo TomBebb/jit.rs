@@ -1,7 +1,8 @@
 use function::UncompiledFunction;
 use function::Abi::CDecl;
 use types::get;
-use libc::c_long;
+use 
+std::os::raw::c_long;
 use types::{consts, CowType, Type};
 use util::from_ptr;
 use value::Val;

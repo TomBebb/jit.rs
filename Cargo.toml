@@ -17,8 +17,9 @@ name = "jit"
 path = "src/jit.rs"
 
 [dependencies]
-libc = "*"
+cbox = "0.*"
 bitflags = "0.7"
+libc = "*"
 
 [dependencies.libjit-sys]
 path = "sys"
@@ -26,4 +27,10 @@ version = "*"
 
 [dev-dependencies.jit_macros]
 path = "macro"
+version = "*"
+
+
+[dev-dependencies.hyper]
+version = "0.*"
+[dev-dependencies.libc]
 version = "*"

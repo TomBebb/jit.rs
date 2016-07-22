@@ -236,6 +236,16 @@ macro_rules! native_ref(
         }
     )
 );
+macro_rules! dispose {
+    ($ty:ty, $inner:ty, $dispose:expr) => (
+        impl ::cbox::NativeRef for $ty {
+            type RefTo = $inner;
+            unsafe fn dispose(ptr: *mut $inner) {
+                $dispose(ptr)
+            }
+        }
+    )
+}
 macro_rules! builtin_type(
     ($c_name:ident -> $rust_name:ident) => (
         pub fn $rust_name() -> StaticType {

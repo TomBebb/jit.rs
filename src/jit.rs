@@ -48,10 +48,11 @@
 //! ```
 #[macro_use]
 extern crate bitflags;
+extern crate cbox;
 extern crate libc;
 extern crate libjit_sys as raw;
 use raw::*;
-use libc::c_void;
+use std::os::raw::c_void;
 use std::mem;
 pub use compile::Compile;
 pub use context::Context;

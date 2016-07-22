@@ -37,14 +37,14 @@ pub fn dump<F>(cb: F) -> Result<String, Error> where F:FnOnce(*mut FILE) {
         Ok(text)
     }
 }
-pub fn from_ptr_opt<R>(ptr: *mut c_void) -> Option<R> where R:From<*mut c_void> {
+pub fn from_ptr_opt<R, T>(ptr: *mut T) -> Option<R> where R:From<*mut T> {
     if ptr.is_null() {
         None
     } else {
         Some(from_ptr(ptr))
     }
 }
-pub fn from_ptr_oom<R>(ptr: *mut c_void) -> R where R:From<*mut c_void> {
+pub fn from_ptr_oom<R, T>(ptr: *mut T) -> R where R:From<*mut T> {
     if ptr.is_null() {
         oom();
     } else {
@@ -52,6 +52,6 @@ pub fn from_ptr_oom<R>(ptr: *mut c_void) -> R where R:From<*mut c_void> {
     }
 }
 
-pub fn from_ptr<R>(ptr: *mut c_void) -> R where R:From<*mut c_void> {
+pub fn from_ptr<R, T>(ptr: *mut T) -> R where R:From<*mut T> {
     From::from(ptr)
 }

@@ -1,4 +1,7 @@
+extern crate hyper;
 extern crate jit;
+
+use hyper::client::Client;
 use jit::*;
 use std::cell::RefCell;
 use std::io::prelude::*;
@@ -8,6 +11,20 @@ use std::iter::Peekable;
 use std::mem;
 use std::env;
 use std::rc::Rc;
+use std::os::raw;
+
+pub type Cell = u8;
+extern {
+    fn putchar(c: raw::c_int) -> ();
+    fn getchar() -> raw::c_int;
+}
+
+extern fn put_char(c: Cell) {
+    unsafe { putchar(c as raw::c_int) }
+}
+extern fn get_char() -> Cell {
+    unsafe { getchar() as Cell }
+}
 
 static PROMPT:&'static str = "> ";
 type WrappedLoop<'a> = Rc<RefCell<Loop<'a>>>;
@@ -36,73 +53,60 @@ impl<'a> Loop<'a> {
     }
 }
 
-fn count<'a, I>(func: &UncompiledFunction<'a>, code: &mut Peekable<I>, curr:char) -> &'a Val where I:Iterator<Item=char> {
+fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Item=char> {
     let mut amount = 1;
     while code.peek() == Some(&curr) {
         amount += 1;
         code.next();
     }
-    func.insn_of(amount)
+    amount
 }
 
 fn compile<'a>(func: &UncompiledFunction<'a>, code: &str) {
-    let ubyte = typecs::get_ubyte();
-    let putchar_sig = get::<fn(u8)>();
-    let readchar_sig = get::<fn() -> u8>();
+    let cell_t = get::<Cell>();
+    let cell_size = mem::size_of::<Cell>();
+    let putchar_sig = get::<fn(Cell)>();
+    let getchar_sig = get::<fn() -> Cell>();
     let ref data = func[0];
     let mut current_loop = None;
     let mut code = code.chars().peekable();
     while let Some(c) = code.next() {
         match c {
             '>' => {
-                let amount = count(func, &mut code, c);
-                let new_value = data + amount;
+                let amount = count(&mut code, c);
+                let new_value = data + func.insn_of(cell_size * amount);
                 func.insn_store(data, new_value);
             },
             '<' => {
-                let amount = count(func, &mut code, c);
-                let new_value = data - amount;
+                let amount = count(&mut code, c);
+                let new_value = data - func.insn_of(cell_size * amount);
                 func.insn_store(data, new_value);
             },
             '+' => {
-                let amount = count(func, &mut code, c);
-                let mut value = func.insn_load_relative(data, 0, ubyte);
-                value = value + amount;
-                value = func.insn_convert(value, ubyte, false);
+                let amount = count(&mut code, c);
+                let mut value = func.insn_load_relative(data, 0, &cell_t);
+                value = value + func.insn_of(cell_size * amount);
+                value = func.insn_convert(value, &cell_t, false);
                 func.insn_store_relative(data, 0, value)
             },
             '-' => {
-                let amount = count(func, &mut code, c);
-                let mut value = func.insn_load_relative(data, 0, ubyte);
-                value = value - amount;
-                value = func.insn_convert(value, ubyte, false);
+                let amount = count(&mut code, c);
+                let mut value = func.insn_load_relative(data, 0, &cell_t);
+                value = value - func.insn_of(cell_size * amount);
+                value = func.insn_convert(value, &cell_t, false);
                 func.insn_store_relative(data, 0, value)
             },
             '.' => {
-                extern fn putchar(c: u8) {
-                    let mut output = io::stdout();
-                    output.write(&[c]).unwrap();
-                    output.flush().unwrap()
-                }
-                let value = func.insn_load_relative(data, 0, ubyte);
-                func.insn_call_native1(Some("putchar"), putchar, &putchar_sig, [value], flags::NO_THROW);
+                let value = func.insn_load_relative(data, 0, &cell_t);
+                func.insn_call_native1(Some("putchar"), put_char, &putchar_sig, [value], flags::NO_THROW);
             },
             ',' => {
-                extern fn readchar() -> u8 {
-                    let mut buf = [0];
-                    // we better have read one byte
-                    let mut input = io::stdin();
-                    if input.read(&mut buf).unwrap() != 1 {
-                        panic!("read more than one byte")
-                    }
-                    buf[0]
-                }
-                let value = func.insn_call_native0(Some("readchar"), readchar, &readchar_sig, flags::NO_THROW);
+                let value = func.insn_call_native0(Some("getchar"), get_char, &getchar_sig, flags::NO_THROW);
                 func.insn_store_relative(data, 0, value);
             },
             '[' => {
                 let wrapped_loop = Rc::new(RefCell::new(Loop::new(func, current_loop)));
-                let tmp = func.insn_load_relative(data, 0, ubyte);
+                let tmp = func.insn_load_relative(data, 0, &cell_t);
                 {
                     let mut borrow = wrapped_loop.borrow_mut();
                     func.insn_branch_if_not(tmp, &mut borrow.end);
@@ -123,30 +127,48 @@ fn compile<'a>(func: &UncompiledFunction<'a>, code: &str) {
     func.insn_default_return();
 }
 fn run(ctx: &mut Context, code: &str) {
-    let sig = get::<fn(&'static u8)>();
+    let sig = get::<fn(&'static Cell)>();
     let func = UncompiledFunction::new(ctx, &sig);
     compile(&func, code);
-    func.compile().with(|func:extern fn(*mut u8)| {
-        let mut data: [u8; 3000] = unsafe { mem::zeroed() };
+    func.compile().with(|func:extern fn(*mut Cell)| {
+        let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
         func(data.as_mut_ptr());
     });
+}
+fn open_file(mut ctx: &mut Context, file: &str) {
+    let mut text = String::new();
+    File::open(file).unwrap().read_to_string(&mut text).unwrap();
+    run(&mut ctx, text.trim());
 }
 fn main() {
     let mut ctx = Context::new();
     let mut args = env::args().skip(1);
     if let Some(ref script) = args.next() {
-        let mut text = String::new();
-        File::open(script).unwrap().read_to_string(&mut text).unwrap();
-        run(&mut ctx, &*text);
+        open_file(&mut ctx, script);
     } else {
-        let mut input = io::stdin();
+        let input = io::stdin();
         let mut output = io::stdout();
+        let mut line = String::new();
         loop {
             output.write(PROMPT.as_bytes()).unwrap();
             output.flush().unwrap();
-            let mut line = String::new();
             input.read_line(&mut line).unwrap();
-            run(&mut ctx, &line);
+            match line.trim() {
+                "file" => {
+                    println!("Please enter a file path to open:");
+                    input.read_line(&mut line).unwrap();
+                    open_file(&mut ctx, &line);
+                },
+                "url" => {
+                    println!("Please enter a URL to open:");
+                    input.read_line(&mut line).unwrap();
+                    let client = Client::new();
+                    let mut res = client.get(&line).send().unwrap();
+                    res.read_to_string(&mut line).unwrap();
+                    run(&mut ctx, &line);
+                },
+                _ => run(&mut ctx, &line)
+            }
             output.write("\n".as_bytes()).unwrap();
         }
     }
