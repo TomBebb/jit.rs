@@ -292,6 +292,13 @@ impl<'a> UncompiledFunction<'a> {
         }
     }
     #[inline(always)]
+    /// Make an instruction to check if the `value` is a null value, and throw an exception if it is.
+    pub fn insn_check_null(&self, value: &'a Val) {
+        unsafe {
+            jit_insn_check_null(self.into(), value.into());
+        }
+    }
+    #[inline(always)]
     /// Make an instruction that converts the value to the type given
     pub fn insn_convert(&self, v: &'a Val,
                             t:&Ty, overflow_check:bool) -> &'a Val {
