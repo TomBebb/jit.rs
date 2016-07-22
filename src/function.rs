@@ -43,7 +43,7 @@ pub mod flags {
     use libc::c_int;
     /// Call flags to a function
     bitflags!(
-        flags CallFlags: c_int {
+        pub flags CallFlags: c_int {
             /// When the function won't throw a value
             const NO_THROW = 1,
             /// When the function won't return a value

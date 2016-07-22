@@ -1,7 +1,6 @@
 use raw::*;
 use compile::Compile;
 use function::Abi;
-use alloc::oom;
 use libc::{c_char, c_uint, c_void};
 use util::{from_ptr, from_ptr_opt};
 use std::borrow::*;
@@ -16,7 +15,7 @@ pub use kind::TypeKind;
 pub mod kind {
     use libc::c_int;
     bitflags!(
-        flags TypeKind: c_int {
+        pub flags TypeKind: c_int {
             const Void = 0,
             const SByte = 1,
             const UByte = 2,
@@ -44,14 +43,14 @@ pub mod kind {
 impl fmt::Debug for Ty {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let kind = self.get_kind();
-        if kind.contains(TypeKind::SysChar) {
+        if kind.contains(kind::SysChar) {
             fmt.write_str("char")
-        } else if kind.contains(TypeKind::SysBool) {
+        } else if kind.contains(kind::SysBool) {
             fmt.write_str("bool")
-        } else if kind.contains(TypeKind::Pointer) {
+        } else if kind.contains(kind::Pointer) {
             try!(fmt.write_str("&mut"));
             write!(fmt, "&mut {:?}", self.get_ref().unwrap())
-        } else if kind.contains(TypeKind::Signature) {
+        } else if kind.contains(kind::Signature) {
             try!(fmt.write_str("fn("));
             let params = self.params();
             let (size, _) = params.size_hint();
@@ -63,12 +62,12 @@ impl fmt::Debug for Ty {
             }
             try!(fmt.write_str(")"));
             if let Some(x) = self.get_return() {
-                if !x.get_kind().contains(TypeKind::Void) {
+                if !x.get_kind().contains(kind::Void) {
                     try!(write!(fmt, " -> {:?}", x))
                 }
             }
             Ok(())
-        } else if kind.contains(TypeKind::Struct) {
+        } else if kind.contains(kind::Struct) {
             try!(fmt.write_str("("));
             let fields = self.fields();
             let (size, _) = fields.size_hint();
@@ -79,7 +78,7 @@ impl fmt::Debug for Ty {
                 }
             }
             fmt.write_str(")")
-        } else if kind.contains(TypeKind::Union) {
+        } else if kind.contains(kind::Union) {
             try!(fmt.write_str("union("));
             let fields = self.fields();
             let (size, _) = fields.size_hint();
@@ -90,31 +89,31 @@ impl fmt::Debug for Ty {
                 }
             }
             fmt.write_str(")")
-        } else if kind.contains(TypeKind::NFloat) {
+        } else if kind.contains(kind::NFloat) {
             fmt.write_str("float")
-        } else if kind.contains(TypeKind::Float32) {
+        } else if kind.contains(kind::Float32) {
             fmt.write_str("f32")
-        } else if kind.contains(TypeKind::Float64) {
+        } else if kind.contains(kind::Float64) {
             fmt.write_str("f64")
-        } else if kind.contains(TypeKind::ULong) {
+        } else if kind.contains(kind::ULong) {
             fmt.write_str("u64")
-        } else if kind.contains(TypeKind::Long) {
+        } else if kind.contains(kind::Long) {
             fmt.write_str("i64")
-        } else if kind.contains(TypeKind::NUInt) {
+        } else if kind.contains(kind::NUInt) {
             fmt.write_str("usize")
-        } else if kind.contains(TypeKind::NInt) {
+        } else if kind.contains(kind::NInt) {
             fmt.write_str("isize")
-        } else if kind.contains(TypeKind::UInt) {
+        } else if kind.contains(kind::UInt) {
             fmt.write_str("u32")
-        } else if kind.contains(TypeKind::Int) {
+        } else if kind.contains(kind::Int) {
             fmt.write_str("i32")
-        } else if kind.contains(TypeKind::UShort) {
+        } else if kind.contains(kind::UShort) {
             fmt.write_str("u16")
-        } else if kind.contains(TypeKind::Short) {
+        } else if kind.contains(kind::Short) {
             fmt.write_str("i16")
-        } else if kind.contains(TypeKind::UByte) {
+        } else if kind.contains(kind::UByte) {
             fmt.write_str("u8")
-        } else if kind.contains(TypeKind::SByte) {
+        } else if kind.contains(kind::SByte) {
             fmt.write_str("i8")
         } else {
             fmt.write_str("()")
@@ -453,7 +452,7 @@ impl Ty {
                             .map(|name| name.as_bytes().as_ptr() as *mut c_char)
                             .collect::<Vec<_>>();
             if jit_type_set_names(self.into(), c_names.as_mut_ptr(), names.len() as u32) == 0 {
-                oom();
+                panic!("out of memory")
             }
         }
     }
@@ -525,7 +524,7 @@ impl Ty {
     /// ```
     pub fn is_float(&self) -> bool {
         let kind = self.get_kind();
-        kind.contains(TypeKind::NFloat) || kind.contains(TypeKind::Float32) || kind.contains(TypeKind::Float64)
+        kind.contains(kind::NFloat) || kind.contains(kind::Float32) || kind.contains(kind::Float64)
     }
     /// Check if this is an integer
     ///

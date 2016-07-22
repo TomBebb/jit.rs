@@ -2,6 +2,10 @@ use libc::*;
 use std::fmt::Error;
 use std::{mem, str};
 
+pub fn oom() -> ! {
+    panic!("out of memory")
+}
+
 pub fn dump<F>(cb: F) -> Result<String, Error> where F:FnOnce(*mut FILE) {
     unsafe {
         let mut pair = [0, 0];
@@ -41,7 +45,6 @@ pub fn from_ptr_opt<R>(ptr: *mut c_void) -> Option<R> where R:From<*mut c_void> 
     }
 }
 pub fn from_ptr_oom<R>(ptr: *mut c_void) -> R where R:From<*mut c_void> {
-    use alloc::oom;
     if ptr.is_null() {
         oom();
     } else {
