@@ -535,7 +535,7 @@ impl<'a> UncompiledFunction<'a> {
     /// Make an instruction that stores the `value` at the address `dest + offset`, where `dest`
     /// must be a pointer
     pub fn insn_store_relative(&self, dest: &'a Val, offset: usize, value: &'a Val) {
-        if cfg!(not(ndebug)) && !dest.get_type().is_pointer() {
+        if cfg!(debug_assertions) && !dest.get_type().is_pointer() {
             panic!("Destination given to insn_store_relative should be pointer, got {:?}", value.get_type());
         }
         unsafe {
