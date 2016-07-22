@@ -13,6 +13,3 @@ build = "build.rs"
 [lib]
 name = "libjit_sys"
 path = "lib.rs"
-
-[dependencies]
-libc = "*"
