@@ -35,7 +35,7 @@ struct Loop<'a> {
 }
 
 impl<'a> Loop<'a> {
-    fn new(func: &UncompiledFunction, current_loop: Option<WrappedLoop<'a>>) -> Loop<'a> {
+    fn new(func: &'a UncompiledFunction, current_loop: Option<WrappedLoop<'a>>) -> Loop<'a> {
         let mut new_loop = Loop {
             start: Label::new(func),
             end: Label::new(func),
@@ -44,7 +44,7 @@ impl<'a> Loop<'a> {
         func.insn_label(&mut new_loop.start);
         new_loop
     }
-    fn end(&mut self, func: &UncompiledFunction) -> Option<WrappedLoop<'a>> {
+    fn end(&mut self, func: &'a UncompiledFunction) -> Option<WrappedLoop<'a>> {
         func.insn_branch(&mut self.start);
         func.insn_label(&mut self.end);
         let mut parent = None;
@@ -130,7 +130,7 @@ fn run(ctx: &mut Context, code: &str) {
     let sig = get::<fn(&'static Cell)>();
     let func = UncompiledFunction::new(ctx, &sig);
     compile(&func, code);
-    func.compile().with(|func:extern fn(*mut Cell)| {
+    UncompiledFunction::compile(func).with(|func:extern fn(*mut Cell)| {
         let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
         func(data.as_mut_ptr());
     });

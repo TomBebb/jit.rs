@@ -964,19 +964,19 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Compile the function
-    pub fn compile(&mut self) -> CSemiBox<CompiledFunction> {
+    pub fn compile<'a>(func: CSemiBox<'a, UncompiledFunction>) -> CSemiBox<'a, CompiledFunction> {
         unsafe {
-            let ptr = self.into();
-            mem::forget(self);
+            let ptr = (&*func).into();
+            mem::forget(func);
             jit_function_compile(ptr);
             CSemiBox::new(ptr)
         }
     }
     #[inline(always)]
     /// Compile the function and call a closure with it directly
-    pub fn compile_with<A, R, F>(&mut self, cb: F) -> CSemiBox<CompiledFunction>
+    pub fn compile_with<'a, A, R, F>(func: CSemiBox<'a, UncompiledFunction>, cb: F) -> CSemiBox<'a, CompiledFunction>
         where F:FnOnce(extern fn(A) -> R) {
-        let compiled = self.compile();
+        let compiled = UncompiledFunction::compile(func);
         compiled.with(cb);
         compiled
     }
