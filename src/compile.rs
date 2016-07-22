@@ -14,13 +14,13 @@ use raw::*;
 /// The lifetime is the lifetime of the value
 pub trait Compile<'a> {
     /// Get a JIT representation of this value
-    fn compile(self, func:&UncompiledFunction<'a>) -> &'a Val;
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val;
     /// Get the type descriptor that represents this type
     fn get_type() -> CowType<'a>;
 }
 impl<'a> Compile<'a> for () {
     #[inline(always)]
-    fn compile(self, func:&UncompiledFunction<'a>) -> &'a Val {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         Val::new(func, consts::get_void())
     }
     #[inline(always)]
@@ -46,7 +46,7 @@ compile_prims!{
 }
 impl<'a, T> Compile<'a> for &'a T where T:Compile<'a> + Sized {
     #[inline(always)]
-    fn compile(self, func:&UncompiledFunction<'a>) -> &'a Val {
+    fn compile(self, func:&UncompiledFunction) -> &'a Val {
         unsafe {
             let ty = <&'a T as Compile<'a>>::get_type();
             from_ptr(jit_value_create_nint_constant(
@@ -64,7 +64,7 @@ impl<'a, T> Compile<'a> for &'a T where T:Compile<'a> + Sized {
 
 impl<'a> Compile<'a> for &'a str {
     #[inline(always)]
-    fn compile(self, func:&UncompiledFunction<'a>) -> &'a Val {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         unsafe {
             let ty = <&'a str as Compile<'a>>::get_type();
             let structure = Val::new(func, &ty);
@@ -84,7 +84,7 @@ impl<'a> Compile<'a> for &'a str {
 }
 impl<'a> Compile<'a> for &'a CStr {
     #[inline(always)]
-    fn compile(self, func:&UncompiledFunction<'a>) -> &'a Val {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         let bytes = self.to_bytes();
         unsafe { mem::transmute::<_, isize>(bytes.as_ptr()) }.compile(func)
     }

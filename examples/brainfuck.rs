@@ -35,7 +35,7 @@ struct Loop<'a> {
 }
 
 impl<'a> Loop<'a> {
-    fn new(func: &UncompiledFunction<'a>, current_loop: Option<WrappedLoop<'a>>) -> Loop<'a> {
+    fn new(func: &UncompiledFunction, current_loop: Option<WrappedLoop<'a>>) -> Loop<'a> {
         let mut new_loop = Loop {
             start: Label::new(func),
             end: Label::new(func),
@@ -44,7 +44,7 @@ impl<'a> Loop<'a> {
         func.insn_label(&mut new_loop.start);
         new_loop
     }
-    fn end(&mut self, func: &UncompiledFunction<'a>) -> Option<WrappedLoop<'a>> {
+    fn end(&mut self, func: &UncompiledFunction) -> Option<WrappedLoop<'a>> {
         func.insn_branch(&mut self.start);
         func.insn_label(&mut self.end);
         let mut parent = None;
@@ -62,7 +62,7 @@ fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Ite
     amount
 }
 
-fn compile<'a>(func: &UncompiledFunction<'a>, code: &str) {
+fn compile<'a>(func: &UncompiledFunction, code: &str) {
     let cell_t = get::<Cell>();
     let cell_size = mem::size_of::<Cell>();
     let putchar_sig = get::<fn(Cell)>();

@@ -44,14 +44,6 @@ pub fn from_ptr_opt<R, T>(ptr: *mut T) -> Option<R> where R:From<*mut T> {
         Some(from_ptr(ptr))
     }
 }
-pub fn from_ptr_oom<R, T>(ptr: *mut T) -> R where R:From<*mut T> {
-    if ptr.is_null() {
-        oom();
-    } else {
-        from_ptr(ptr)
-    }
-}
-
 pub fn from_ptr<R, T>(ptr: *mut T) -> R where R:From<*mut T> {
     From::from(ptr)
 }

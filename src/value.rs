@@ -31,7 +31,7 @@ impl Val {
     /// The value initially starts off as a block-specific temporary. It will be
     /// converted into a function-wide local variable if it is ever referenced
     /// from a different block.
-    pub fn new<'a>(func:&UncompiledFunction<'a>, value_type:&Ty) -> &'a Val {
+    pub fn new<'a>(func:&'a UncompiledFunction, value_type:&Ty) -> &'a Val {
         unsafe {
             jit_value_create(func.into(), value_type.into()).into()
         }
@@ -43,7 +43,7 @@ impl Val {
         }
     }
     /// Get the function which made this value
-    pub fn get_function(&self) -> UncompiledFunction {
+    pub fn get_function(&self) -> &UncompiledFunction {
         unsafe {
             jit_value_get_function(self.into()).into()
         }

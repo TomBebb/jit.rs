@@ -20,7 +20,7 @@ impl<'a> fmt::Display for Label<'a> {
 impl<'a> Label<'a> {
     #[inline(always)]
     /// Create a new label
-    pub fn new(func:&UncompiledFunction<'a>) -> Label<'a> {
+    pub fn new(func:&'a UncompiledFunction) -> Label<'a> {
         unsafe {
             Label {
                 _label: jit_function_reserve_label(func.into()),
