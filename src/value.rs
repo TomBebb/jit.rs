@@ -1,6 +1,7 @@
 use raw::*;
 use function::UncompiledFunction;
 use types::*;
+use context::Context;
 use std::marker::PhantomData;
 use std::fmt;
 use std::ops::*;
@@ -28,6 +29,10 @@ impl Val {
         unsafe {
             jit_value_create(func.into(), value_type.into()).into()
         }
+    }
+    /// Get the context this value is contained in
+    pub fn get_context(&self) -> &Context<()> {
+        unsafe { jit_value_get_context(self.into()).into() }
     }
     /// Get the type of the value
     pub fn get_type(&self) -> &Ty {

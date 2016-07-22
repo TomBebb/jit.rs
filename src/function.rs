@@ -59,6 +59,10 @@ std::os::raw::c_int;
 pub struct Func(PhantomData<[()]>);
 native_ref!(&Func = jit_function_t);
 impl Func {
+    /// Get the context this function is contained in
+    pub fn get_context(&self) -> &Context<()> {
+        unsafe { jit_function_get_context(self.into()).into() }
+    }
     /// Check if the given function has been compiled
     pub fn is_compiled(&self) -> bool {
         unsafe { jit_function_is_compiled(self.into()) != 0 }
@@ -253,7 +257,7 @@ impl<'a> UncompiledFunction<'a> {
     /// let mut ctx = Context::<()>::new();
     /// let func = UncompiledFunction::new(&mut ctx, &get::<fn(f64) -> f64>());
     /// ```
-    pub fn new<T>(context:&'a mut Context<T>, signature:&Ty) -> UncompiledFunction<'a> {
+    pub fn new<T>(context:&'a Context<T>, signature:&'a Ty) -> UncompiledFunction<'a> {
         unsafe {
             let mut me:UncompiledFunction = from_ptr_oom(jit_function_create(
                 context.into(),
@@ -277,7 +281,7 @@ impl<'a> UncompiledFunction<'a> {
     /// never be called by anyone except its parent and sibling functions.
     /// The front end is also responsible for ensuring that the nested function
     /// is compiled before its parent.
-    pub fn new_nested<T>(context:&'a mut Context<T>, signature: &Ty,
+    pub fn new_nested<T>(context:&'a Context<T>, signature: &'a Ty,
                         parent: &'a UncompiledFunction<'a>) -> UncompiledFunction<'a> {
         unsafe {
             let mut me:UncompiledFunction = from_ptr_oom(jit_function_create_nested(
