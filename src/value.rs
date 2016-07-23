@@ -31,6 +31,9 @@ impl Val {
     /// The value initially starts off as a block-specific temporary. It will be
     /// converted into a function-wide local variable if it is ever referenced
     /// from a different block.
+    ///
+    /// Basically, use this for allocating values you want to be able to 
+    /// access and change throughout the function.
     pub fn new<'a>(func:&'a UncompiledFunction, value_type:&Ty) -> &'a Val {
         unsafe {
             jit_value_create(func.into(), value_type.into()).into()

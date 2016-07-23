@@ -887,7 +887,7 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Make instructions to run the block if the condition is met
-    pub fn insn_if<B>(&self, cond: &Val, block: B) where B:FnOnce() {
+    pub fn build_if<B>(&self, cond: &Val, block: B) where B:FnOnce() {
         let mut after = Label::new(self);
         self.insn_branch_if_not(cond, &mut after);
         block();
@@ -895,7 +895,7 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Make instructions to run the block if the condition is not met
-    pub fn insn_if_not<B>(&self, cond: &Val, block: B) where B:FnOnce() {
+    pub fn build_if_not<B>(&self, cond: &Val, block: B) where B:FnOnce() {
         let mut after = Label::new(self);
         self.insn_branch_if(cond, &mut after);
         block();
@@ -903,7 +903,7 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Make instructions to run the block if the condition is met
-    pub fn insn_if_else<A, B>(&self, cond: &Val, if_block: A, else_block: B) where A:FnOnce(), B:FnOnce() {
+    pub fn build_if_else<A, B>(&self, cond: &Val, if_block: A, else_block: B) where A:FnOnce(), B:FnOnce() {
         let mut after = Label::new(self);
         let mut end = Label::new(self);
         self.insn_branch_if_not(cond, &mut after);
@@ -914,7 +914,7 @@ impl UncompiledFunction {
         self.insn_label(&mut end)
     }
     /// Make instructions to run the block forever
-    pub fn insn_loop<B>(&self, block: B) where B:FnOnce() {
+    pub fn build_loop<B>(&self, block: B) where B:FnOnce() {
         let mut start = Label::new(self);
         self.insn_label(&mut start);
         block();
@@ -922,7 +922,7 @@ impl UncompiledFunction {
     }
     /// Make instructions to run the block and continue running it so long
     /// as the condition is met
-    pub fn insn_while<'a, C, B>(&'a self, cond: C, block: B)
+    pub fn build_while<'a, C, B>(&'a self, cond: C, block: B)
         where C:FnOnce() -> &'a Val, B:FnOnce() {
         let mut start = Label::new(self);
         self.insn_label(&mut start);
@@ -932,6 +932,14 @@ impl UncompiledFunction {
         block();
         self.insn_branch(&mut start);
         self.insn_label(&mut after);
+    }
+    /// Make instructions to run the c loop specified.
+    pub fn build_cfor<'a, C, E, B>(&'a self, cond: C, each: E, block: B)
+        where C:FnOnce() -> &'a Val, E: FnOnce(), B: FnOnce() {
+        self.build_while(cond, || {
+            block();
+            each();
+        })
     }
     #[inline(always)]
     /// Set the optimization level of the function, where the bigger the level,
