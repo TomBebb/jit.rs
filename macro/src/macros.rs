@@ -632,7 +632,8 @@ macro_rules! jit_func(
             let $name = &func;
             $($st;)+
         };
-        UncompiledFunction::compile(func).with(|comp: extern fn(()) -> $ret| {
+        let compiled = UncompiledFunction::compile(func);
+        compiled.with(|comp: extern fn(()) -> $ret| {
             let $name: extern fn() -> $ret = unsafe { mem::transmute(comp) };
             $value
         })
@@ -650,7 +651,8 @@ macro_rules! jit_func(
             };)*
             $($st;)+
         };
-        UncompiledFunction::compile(func).with(|comp: extern fn(($($ty),+)) -> $ret| {
+        let compiled = UncompiledFunction::compile(func);
+        compiled.with(|comp: extern fn(($($ty),+)) -> $ret| {
             let $name: extern fn($($ty),+) -> $ret = unsafe { mem::transmute(comp) };
             $value
         })

@@ -920,8 +920,8 @@ impl UncompiledFunction {
         block();
         self.insn_branch(&mut start);
     }
-    /// Make instructions to run the block and continue running it so long
-    /// as the condition is met
+    /// Make instructions to run the block `block` repeatedly so long
+    /// as the condition `cond` is met.
     pub fn build_while<'a, C, B>(&'a self, cond: C, block: B)
         where C:FnOnce() -> &'a Val, B:FnOnce() {
         let mut start = Label::new(self);
@@ -931,6 +931,18 @@ impl UncompiledFunction {
         self.insn_branch_if_not(cond_v, &mut after);
         block();
         self.insn_branch(&mut start);
+        self.insn_label(&mut after);
+    }
+    /// Make instructions to run the block and continue running it so long
+    /// as the condition is met
+    pub fn build_do_while<'a, C, B>(&'a self, cond: C, block: B)
+        where C:FnOnce() -> &'a Val, B:FnOnce() {
+        let mut start = Label::new(self);
+        self.insn_label(&mut start);
+        let mut after = Label::new(self);
+        block();
+        let cond_v = cond();
+        self.insn_branch_if(cond_v, &mut start);
         self.insn_label(&mut after);
     }
     /// Make instructions to run the c loop specified.
