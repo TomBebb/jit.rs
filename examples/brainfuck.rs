@@ -127,7 +127,7 @@ fn compile<'a>(func: &UncompiledFunction, code: &str) {
     func.insn_default_return();
 }
 fn run(ctx: &mut Context, code: &str) {
-    let sig = get::<fn(&'static Cell)>();
+    let sig = get::<fn(*const Cell)>();
     let func = UncompiledFunction::new(ctx, &sig);
     compile(&func, code);
     UncompiledFunction::compile(func).with(|func:extern fn(*mut Cell)| {

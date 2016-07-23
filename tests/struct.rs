@@ -1,32 +1,48 @@
-#![feature(custom_derive, custom_attribute, plugin)]
-#![plugin(jit_macros)]
 #[no_link] #[macro_use]
 extern crate jit_macros;
 extern crate jit;
 use jit::*;
+use std::mem;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(packed)]
-#[derive(Compile)]
-pub struct Position {
-    x: f64,
-    y: f64
+pub struct Position(f64, f64);
+impl<'a> Compile<'a> for Position {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        func.insn_of(())
+    }
+    fn get_type() -> CowType<'a> {
+        let f64_t = get::<f64>();
+        Type::new_struct(&mut [&f64_t, &f64_t]).into()
+    }
 }
 
-#[repr(packed)]
-#[derive(Compile)]
-pub struct Vector2<T> {
-    a: T,
-    b: T
+impl<'a, 'b> Compile<'a> for &'b Position {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        let c = func.insn_alloca_of::<Position>();
+        func.insn_store_relative(c, 0, func.insn_of(self.0));
+        func.insn_store_relative(c, mem::size_of::<f64>(), func.insn_of(self.1));
+        c
+    }
+    fn get_type() -> CowType<'a> {
+        Type::new_pointer(&Position::get_type()).into()
+    }
 }
 
 #[test]
 fn test_struct() {
-    let pos_t = get::<Position>();
-    for (i, field) in pos_t.fields().enumerate() {
-        assert_eq!(field.get_name().unwrap(), match i {
-            0 => "x",
-            1 => "y",
-            _ => unimplemented!()
-        })
-    }
+    let mut ctx = Context::<()>::new();
+    jit_func!(&mut ctx, func, fn(pos: *const Position, mult: f64) -> () {
+        let f64_t = get::<f64>();
+        let mut x = func.insn_load_relative(pos, 0, &f64_t);
+        let mut y = func.insn_load_relative(pos, f64_t.get_size(), &f64_t);
+        x = func.insn_mul(x, mult);
+        y = func.insn_mul(y, mult);
+        func.insn_store_relative(pos, 0, x);
+        func.insn_store_relative(pos, f64_t.get_size(), y);
+    }, {
+        let pos = Position(1., 2.);
+        func(&pos, 2.);
+        assert_eq!(pos, Position(2., 4.));
+    });
 }

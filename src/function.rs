@@ -219,7 +219,7 @@ impl UncompiledFunction {
     /// let mut ctx = Context::<()>::new();
     /// let func = UncompiledFunction::new(&mut ctx, &get::<fn(f64) -> f64>());
     /// ```
-    pub fn new<'a, T>(context:&'a Context<T>, signature:&'a Ty) -> CSemiBox<'a, UncompiledFunction> {
+    pub fn new<'a, T>(context:&'a Context<T>, signature:&Ty) -> CSemiBox<'a, UncompiledFunction> {
         unsafe {
             CSemiBox::new(jit_function_create(
                 context.into(),
@@ -237,7 +237,7 @@ impl UncompiledFunction {
     /// never be called by anyone except its parent and sibling functions.
     /// The front end is also responsible for ensuring that the nested function
     /// is compiled before its parent.
-    pub fn new_nested<'a, T>(context:&'a Context<T>, signature: &'a Ty,
+    pub fn new_nested<'a, T>(context:&'a Context<T>, signature: &Ty,
                         parent: &'a UncompiledFunction) -> CSemiBox<'a, UncompiledFunction> {
         unsafe {
             CSemiBox::new(jit_function_create_nested(
@@ -849,6 +849,11 @@ impl UncompiledFunction {
         unsafe {
             from_ptr(jit_insn_alloca(self.into(), size.into()))
         }
+    }
+    #[inline(always)]
+    /// Make an instruction that allocates enough bytes for the type `T` from the stack
+    pub fn insn_alloca_of<T>(&self) -> &Val where T: Sized {
+        self.insn_alloca(self.insn_of(mem::size_of::<T>()))
     }
     #[inline(always)]
     /// Make an instruction that gets the address of a value

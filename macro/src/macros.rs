@@ -626,19 +626,21 @@ macro_rules! jit(
 macro_rules! jit_func(
     ($ctx:expr, $name:ident, fn() -> $ret:ty {$($st:stmt;)+}, $value:expr) => ({
         use std::mem;
-        let func = UncompiledFunction::new($ctx, &get::<fn() -> $ret>());
+        let sig = get::<fn() -> $ret>();
+        let func = UncompiledFunction::new($ctx, &sig);
         {
             let $name = &func;
             $($st;)+
         };
-        func.compile().with(|comp: extern fn(()) -> $ret| {
+        UncompiledFunction::compile(func).with(|comp: extern fn(()) -> $ret| {
             let $name: extern fn() -> $ret = unsafe { mem::transmute(comp) };
             $value
         })
     });
     ($ctx:expr, $name:ident, fn($($arg:ident:$ty:ty),+) -> $ret:ty {$($st:stmt;)+}, $value:expr) => ({
         use std::mem;
-        let func = UncompiledFunction::new($ctx, &get::<fn($($ty),+) -> $ret>());
+        let sig = get::<fn($($ty),+) -> $ret>();
+        let func = UncompiledFunction::new($ctx, &sig);
         {
             let $name = &func;
             let mut i = 0;
@@ -648,7 +650,7 @@ macro_rules! jit_func(
             };)*
             $($st;)+
         };
-        func.compile().with(|comp: extern fn(($($ty),+)) -> $ret| {
+        UncompiledFunction::compile(func).with(|comp: extern fn(($($ty),+)) -> $ret| {
             let $name: extern fn($($ty),+) -> $ret = unsafe { mem::transmute(comp) };
             $value
         })

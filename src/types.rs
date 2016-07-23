@@ -1,15 +1,14 @@
 use raw::*;
 use compile::Compile;
 use function::Abi;
-use 
-std::os::raw::{c_char, c_uint, c_void};
+use  std::os::raw::{c_char, c_uint, c_void};
 use util::{from_ptr, from_ptr_opt};
 use std::borrow::*;
 use std::marker::PhantomData;
 use std::{fmt, mem, str};
 use std::iter::IntoIterator;
 use std::ffi::{self, CString};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 pub use kind::TypeKind;
 /// The integer representation of a type
@@ -340,6 +339,11 @@ impl<'a> Deref for Type {
         self._type.into()
     }
 }
+impl<'a> DerefMut for Type {
+    fn deref_mut(&mut self) -> &mut Ty {
+        unsafe { mem::transmute(self._type) }
+    }
+}
 /// A copy-on-write type
 pub type CowType<'a> = Cow<'a, Ty>;
 /// A static type
@@ -365,18 +369,18 @@ impl Type {
     }
     #[inline(always)]
     /// Create a type descriptor for a structure.
-    pub fn new_struct(fields: &mut [&Ty]) -> Type {
+    pub fn new_struct(fields: &[&Ty]) -> Type {
         unsafe {
-            let fields:&mut [jit_type_t] = mem::transmute(fields);
-            jit_type_create_struct(fields.as_mut_ptr(), fields.len() as c_uint, 1).into()
+            let fields:&[jit_type_t] = mem::transmute(fields);
+            jit_type_create_struct(fields.as_ptr() as *mut jit_type_t, fields.len() as c_uint, 1).into()
         }
     }
     #[inline(always)]
     /// Create a type descriptor for a union.
-    pub fn new_union(fields: &mut [&Ty]) -> Type {
+    pub fn new_union(fields: &[&Ty]) -> Type {
         unsafe {
-            let fields:&mut [jit_type_t] = mem::transmute(fields);
-            jit_type_create_union(fields.as_mut_ptr(), fields.len() as c_uint, 1).into()
+            let fields:&[jit_type_t] = mem::transmute(fields);
+            jit_type_create_union(fields.as_ptr() as *mut jit_type_t, fields.len() as c_uint, 1).into()
         }
     }
     #[inline(always)]
@@ -564,7 +568,7 @@ impl Ty {
     ///
     /// ```rust
     /// use jit::*;
-    /// assert!(get::<&'static u8>().is_pointer());
+    /// assert!(get::<*const u8>().is_pointer());
     /// ```
     pub fn is_pointer(&self) -> bool {
         unsafe {

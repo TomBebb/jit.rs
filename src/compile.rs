@@ -44,11 +44,11 @@ compile_prims!{
     (bool, c_long) => (get_sys_bool, jit_value_create_nint_constant),
     (char, c_long) => (get_sys_char, jit_value_create_nint_constant)
 }
-impl<'a, T> Compile<'a> for &'a T where T:Compile<'a> + Sized {
+impl<'a, T> Compile<'a> for *const T where T:Compile<'a> + Sized + 'a {
     #[inline(always)]
-    fn compile(self, func:&UncompiledFunction) -> &'a Val {
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         unsafe {
-            let ty = <&'a T as Compile<'a>>::get_type();
+            let ty = Self::get_type();
             from_ptr(jit_value_create_nint_constant(
                 func.into(),
                 (&*ty).into(),
@@ -66,7 +66,7 @@ impl<'a> Compile<'a> for &'a str {
     #[inline(always)]
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         unsafe {
-            let ty = <&'a str as Compile<'a>>::get_type();
+            let ty = Self::get_type();
             let structure = Val::new(func, &ty);
             func.insn_store_relative(structure, 0, func.insn_of(mem::transmute::<_, isize>(self.as_ptr())));
             func.insn_store_relative(structure, mem::size_of::<usize>(), func.insn_of(self.len()));
@@ -75,7 +75,7 @@ impl<'a> Compile<'a> for &'a str {
     }
     #[inline(always)]
     fn get_type() -> CowType<'a> {
-        let ty = Type::new_struct(&mut [&get::<&'static u8>(), &get::<usize>()]);
+        let ty = Type::new_struct(&mut [&get::<*const u8>(), &get::<usize>()]);
         unsafe {
             jit_type_set_size_and_alignment((&ty).into(), mem::size_of::<*mut str>() as i64, mem::align_of::<*mut str>() as i64);
         }
