@@ -4,10 +4,14 @@ extern crate jit;
 use jit::*;
 
 pub fn main() {
+	// make a new JIT context, with no metadata
 	let mut ctx = Context::<()>::new();
+	// make a function in this context with signature `fn(u64) -> u64`
     jit_func!(&mut ctx, func, fn(n: u64) -> u64 {
+    	// compile constants
     	let two = func.insn_of(2u64);
     	let one = func.insn_of(1u64);
+    	// the LibJIT type equivalent to a `u64`
     	let ty = get::<u64>();
     	// allocate temporary variables
     	let a = Val::new(&func, &ty);
@@ -29,6 +33,7 @@ pub fn main() {
     	});
     	// return the result of adding the very last two numbers
     	func.insn_return(c);
+    	// optimize the function as much as possible
     	func.set_optimization_level(3);
     }, {
     	let fib = func;
