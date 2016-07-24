@@ -720,7 +720,7 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Make an instruction that calls a function that has the signature given
-    /// with some arguments through a pointer to the fucntion
+    /// with some arguments through a pointer to the function
     pub fn insn_call_indirect(&self, func:&Val, signature: &Ty,
                                args: &mut [&Val], flags: flags::CallFlags) -> &Val {
         unsafe {
