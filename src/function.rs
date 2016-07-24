@@ -331,6 +331,13 @@ impl UncompiledFunction {
         self.insn_binop(v1, v2, jit_insn_add_ovf)
     }
     #[inline(always)]
+    /// Make an instruction to add the constant `offset` to the pointer value `ptr`.
+    pub fn insn_add_relative(&self, ptr: &Val, offset: usize) -> &Val {
+        unsafe {
+            jit_insn_add_relative(self.into(), ptr.into(), offset as jit_nint).into()
+        }
+    }
+    #[inline(always)]
     /// Make an instruction that subtracts the second value from the first
     ///
     /// You can also just use `v1 - v2` in your code instead of running this method,
