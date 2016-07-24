@@ -73,8 +73,8 @@ fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Ite
     amount
 }
 
-/// Compile the brainfuck code `code` into IR in the function `func`.
-fn compile<'a>(func: &UncompiledFunction, code: &str) {
+/// Generate the IR for the brainfuck code `code` into the function `func`.
+fn generate<'a>(func: &UncompiledFunction, code: &str) {
     // get the LibJIT equivalents of essential types.
     let cell_t = get::<Cell>();
     let cell_size = mem::size_of::<Cell>();
@@ -146,7 +146,7 @@ fn run(ctx: &mut Context, code: &str) {
     // make a new function for the code
     let func = UncompiledFunction::new(ctx, &sig);
     // generate the IR for the code
-    compile(&func, code);
+    generate(&func, code);
     // compile the code and run it
     UncompiledFunction::compile(func).with(|func:extern fn(*mut Cell)| {
         let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
