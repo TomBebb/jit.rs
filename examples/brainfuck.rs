@@ -19,15 +19,18 @@ extern {
     fn getchar() -> raw::c_int;
 }
 
+/// Print a character to stdout.
 extern fn put_char(c: Cell) {
     unsafe { putchar(c as raw::c_int) }
 }
+/// Read a character from stdout.
 extern fn get_char() -> Cell {
     unsafe { getchar() as Cell }
 }
 
-static PROMPT:&'static str = "> ";
+const PROMPT:&'static str = "> ";
 type WrappedLoop<'a> = Rc<RefCell<Loop<'a>>>;
+/// This type represents a single pair of '[' and ']' in brainfuck code
 struct Loop<'a> {
     start: Label<'a>,
     end: Label<'a>,
@@ -35,6 +38,7 @@ struct Loop<'a> {
 }
 
 impl<'a> Loop<'a> {
+    /// Construct a new loop in `func` as a subloop of `current_loop`
     fn new(func: &'a UncompiledFunction, current_loop: Option<WrappedLoop<'a>>) -> Loop<'a> {
         let mut new_loop = Loop {
             start: Label::new(func),
@@ -44,15 +48,22 @@ impl<'a> Loop<'a> {
         func.insn_label(&mut new_loop.start);
         new_loop
     }
+    /// Generate the appropriate IR to end the loop in the function `func`
     fn end(&mut self, func: &'a UncompiledFunction) -> Option<WrappedLoop<'a>> {
+        // Branch back to the start of the loop
         func.insn_branch(&mut self.start);
+        // Place the label for the end of the loop.
         func.insn_label(&mut self.end);
+        // Set `parent` to `None`.
         let mut parent = None;
         mem::swap(&mut parent, &mut self.parent);
         parent
     }
 }
 
+/// Count the number of times the character `curr` is repeated in `code`,
+/// assuming that the last character to be yielded by the iterator `code`
+/// was also `curr`. 
 fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Item=char> {
     let mut amount = 1;
     while code.peek() == Some(&curr) {
@@ -62,7 +73,9 @@ fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Ite
     amount
 }
 
+/// Compile the brainfuck code `code` into IR in the function `func`.
 fn compile<'a>(func: &UncompiledFunction, code: &str) {
+    // get the LibJIT equivalents of essential types.
     let cell_t = get::<Cell>();
     let cell_size = mem::size_of::<Cell>();
     let putchar_sig = get::<fn(Cell)>();
@@ -126,33 +139,50 @@ fn compile<'a>(func: &UncompiledFunction, code: &str) {
     };
     func.insn_default_return();
 }
+/// Run the brainfuck code `code` by temporarily constructing a new function
+/// in `ctx`
 fn run(ctx: &mut Context, code: &str) {
     let sig = get::<fn(*const Cell)>();
+    // make a new function for the code
     let func = UncompiledFunction::new(ctx, &sig);
+    // generate the IR for the code
     compile(&func, code);
+    // compile the code and run it
     UncompiledFunction::compile(func).with(|func:extern fn(*mut Cell)| {
         let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
         func(data.as_mut_ptr());
     });
 }
+/// Read the contents of `file` as UTF-8 and run it as brainfuck code using
+/// the context `ctx`
 fn open_file(mut ctx: &mut Context, file: &str) {
     let mut text = String::new();
+    // read `file` to `text`
     File::open(file).unwrap().read_to_string(&mut text).unwrap();
+    // run `text`
     run(&mut ctx, text.trim());
 }
 fn main() {
+    // make a new context to make functions on
     let mut ctx = Context::new();
     let mut args = env::args().skip(1);
+    // if an argument was given
     if let Some(ref script) = args.next() {
+        // assume it's a file and run it as code
         open_file(&mut ctx, script);
     } else {
+        // get i/o streams
         let input = io::stdin();
         let mut output = io::stdout();
+        // buffer for temporary strings
         let mut line = String::new();
         loop {
+            // print out a prompt for the REPL
             output.write(PROMPT.as_bytes()).unwrap();
             output.flush().unwrap();
+            // read a line of input into `line`
             input.read_line(&mut line).unwrap();
+            // special cases
             match line.trim() {
                 "file" => {
                     println!("Please enter a file path to open:");
