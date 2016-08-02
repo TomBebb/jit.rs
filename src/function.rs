@@ -111,7 +111,7 @@ impl CompiledFunction {
 
 macro_rules! expect(
     ($name:ident, $value:expr, float) => (
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let ty = $value.get_type();
             if !ty.is_float() {
                 panic!("Value given to {} should be float, got {:?}", stringify!($name), ty);
@@ -119,7 +119,7 @@ macro_rules! expect(
         }
     );
     ($name:ident, $value:expr, primitive) => (
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let ty = $value.get_type();
             if !ty.is_primitive() {
                 panic!("Value given to {} should be primitive, got {:?}", stringify!($name), ty);
@@ -127,7 +127,7 @@ macro_rules! expect(
         }
     );
     ($name:ident, $v1:expr, $v2:expr, primitive) => (
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let ty1 = $v1.get_type();
             let ty2 = $v2.get_type();
             if !ty1.is_primitive() {
@@ -138,7 +138,7 @@ macro_rules! expect(
         }
     );
     ($name:ident, $value:expr, int) => (
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let ty = $value.get_type();
             if !ty.is_int() {
                 panic!("Value given to {} should be integer, got {:?}", stringify!($name), ty);
@@ -146,7 +146,7 @@ macro_rules! expect(
         }
     );
     ($name:ident, $dest:expr, $source:expr, $size:expr) => (
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let dest_t = $dest.get_type();
             let source_t = $source.get_type();
             let size_t = $size.get_type();
@@ -481,7 +481,7 @@ impl UncompiledFunction {
     /// Make an instruction that loads a value of the given type from `value + offset`, where
     /// `value` must be a pointer
     pub fn insn_load_relative(&self, value: &Val, offset: usize, ty: &Ty) -> &Val {
-        if cfg!(not(ndebug)) && !value.get_type().is_pointer() {
+        if cfg!(debug_assertions) && !value.get_type().is_pointer() {
             panic!("Value given to insn_load_relative should be pointer, got {:?}", value.get_type());
         }
         unsafe {
@@ -740,7 +740,7 @@ impl UncompiledFunction {
     fn insn_call_native(&self, name: Option<&str>,
                         native_func: *mut c_void, signature: &Ty,
                         args: &mut [&Val], flags: flags::CallFlags) -> &Val {
-        if cfg!(not(ndebug)) {
+        if cfg!(debug_assertions) {
             let name = name.unwrap_or("unnamed function");
             if !signature.is_signature() {
                 panic!("Bad signature for {} - expected signature, got {:?}", name, signature)

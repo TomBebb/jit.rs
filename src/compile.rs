@@ -1,8 +1,7 @@
 use function::UncompiledFunction;
 use function::Abi::CDecl;
 use types::get;
-use 
-std::os::raw::c_long;
+use std::os::raw::{c_long, c_char};
 use types::{consts, CowType, Type};
 use util::from_ptr;
 use value::Val;
@@ -49,16 +48,33 @@ impl<'a, T> Compile<'a> for *const T where T:Compile<'a> + Sized + 'a {
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         unsafe {
             let ty = Self::get_type();
-            from_ptr(jit_value_create_nint_constant(
+            jit_value_create_nint_constant(
                 func.into(),
                 (&*ty).into(),
                 mem::transmute(self)
-            ))
+            ).into()
         }
     }
     #[inline(always)]
     fn get_type() -> CowType<'a> {
         Type::new_pointer(&get::<T>()).into()
+    }
+}
+impl<'a> Compile<'a> for &'a CStr {
+    #[inline(always)]
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        unsafe {
+            let ty = Self::get_type();
+            jit_value_create_nint_constant(
+                func.into(),
+                (&*ty).into(),
+                mem::transmute(self.as_ptr())
+            ).into()
+        }
+    }
+    #[inline(always)]
+    fn get_type() -> CowType<'a> {
+        Type::new_pointer(consts::get_sys_char()).into()
     }
 }
 
@@ -80,17 +96,6 @@ impl<'a> Compile<'a> for &'a str {
             jit_type_set_size_and_alignment((&ty).into(), mem::size_of::<*mut str>() as i64, mem::align_of::<*mut str>() as i64);
         }
         ty.into()
-    }
-}
-impl<'a> Compile<'a> for &'a CStr {
-    #[inline(always)]
-    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-        let bytes = self.to_bytes();
-        unsafe { mem::transmute::<_, isize>(bytes.as_ptr()) }.compile(func)
-    }
-    #[inline(always)]
-    fn get_type() -> CowType<'a> {
-        Type::new_pointer(consts::get_sys_char()).into()
     }
 }
 compile_tuple!(A, B => a, b);
