@@ -14,7 +14,7 @@ use std::os::raw::{
     c_void
 };
 use std::default::Default;
-use std::{fmt, intrinsics};
+use std::fmt;
 use std::ops::{Deref, DerefMut, Index};
 use std::{mem, ptr};
 use std::ffi::CString;
@@ -74,31 +74,6 @@ impl Func {
     }
 }
 
-pub struct Closure<A, R> {
-    _marker: PhantomData<[()]>,
-    _marker2: PhantomData<(A, R)>
-}
-
-impl<A, R> FnOnce<A> for Closure<A, R> {
-    type Output = R;
-    extern "rust-call" fn call_once(self, _: A) -> R {
-        unsafe { intrinsics::unreachable() };
-    }
-}
-
-impl<A, R> FnMut<A> for Closure<A, R> {
-    extern "rust-call" fn call_mut(&mut self, args: A) -> R {
-        let func: fn(A) -> R = unsafe { mem::transmute(self) };
-        func(args)
-    }
-}
-impl<A, R> Fn<A> for Closure<A, R> {
-    extern "rust-call" fn call(&self, args: A) -> R {
-        let func: fn(A) -> R = unsafe { mem::transmute(self) };
-        func(args)
-    }
-}
-
 /// A function which has already been compiled from an `UncompiledFunction`, so it can
 /// be called but not added to.
 ///
@@ -128,8 +103,9 @@ impl fmt::Debug for CompiledFunction {
 }
 impl CompiledFunction {
     /// Run a closure with the compiled function as an argument
-    pub unsafe fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Closure<A, R> {
-        mem::transmute(jit_function_to_closure((&*func).into()))
+    pub unsafe fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> {
+        let func: fn(A) -> R = mem::transmute(jit_function_to_closure(func.as_ptr()));
+        mem::transmute(&func as &Fn(A) -> R)
     }
     /// Run the compiled function with no arguments
     pub fn apply0<'a, R>(&'a self) -> R {

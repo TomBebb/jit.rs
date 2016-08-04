@@ -2,7 +2,6 @@
 extern crate jit_macros;
 extern crate jit;
 use jit::*;
-use std::mem;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(packed)]
