@@ -103,9 +103,15 @@ impl fmt::Debug for CompiledFunction {
 }
 impl CompiledFunction {
     /// Run a closure with the compiled function as an argument
-    pub unsafe fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> {
-        let func: fn(A) -> R = mem::transmute(jit_function_to_closure(func.as_ptr()));
-        mem::transmute(&func as &Fn(A) -> R)
+    pub fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> where R: Compile<'a> {
+        if cfg!(debug_assertions) {
+            let sig = func.get_signature();
+            assert_eq!(sig.get_return(), Some(&*::get::<R>()));
+        }
+        unsafe {
+            let func: fn(A) -> R = mem::transmute(jit_function_to_closure(func.as_ptr()));
+            mem::transmute(&func as &Fn(A) -> R)
+        }
     }
     /// Run the compiled function with no arguments
     pub fn apply0<'a, R>(&'a self) -> R {

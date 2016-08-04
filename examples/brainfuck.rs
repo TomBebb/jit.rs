@@ -5,7 +5,7 @@ use hyper::client::Client;
 use jit::*;
 use std::cell::RefCell;
 use std::io::prelude::*;
-use std::io;
+use std::io::{BufReader, self};
 use std::fs::File;
 use std::iter::Peekable;
 use std::mem;
@@ -76,6 +76,7 @@ fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Ite
 /// Generate the IR for the brainfuck code `code` into the function `func`.
 fn generate<'a>(func: &UncompiledFunction, code: &str) {
     // get the LibJIT equivalents of essential types.
+    println!("compiling {}", code);
     let cell_t = get::<Cell>();
     let cell_size = mem::size_of::<Cell>();
     let putchar_sig = get::<fn(Cell)>();
@@ -138,6 +139,7 @@ fn generate<'a>(func: &UncompiledFunction, code: &str) {
         }
     };
     func.insn_default_return();
+    println!("{:?}", func);
 }
 /// Run the brainfuck code `code` by temporarily constructing a new function
 /// in `ctx`
@@ -150,7 +152,8 @@ fn run(ctx: &mut Context, code: &str) {
     // compile the code and run it
     let func = UncompiledFunction::compile(func);
     let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
-    let _: () = func.apply1(data.as_mut_ptr());
+    let closure: &Fn(*mut Cell) = CompiledFunction::to_closure(func);
+    closure(data.as_mut_ptr());
 }
 /// Read the contents of `file` as UTF-8 and run it as brainfuck code using
 /// the context `ctx`
@@ -161,6 +164,18 @@ fn open_file(mut ctx: &mut Context, file: &str) {
     // run `text`
     run(&mut ctx, text.trim());
 }
+fn prompt<W, R>(output: &mut W, input: &mut R, mut text: &mut String) -> io::Result<()> where W: Write, R: BufRead {
+    try!(output.write(PROMPT.as_bytes()));
+    try!(output.flush());
+    input.read_line(&mut text).map(|_| ())
+}
+fn prompt_for<W, R>(output: &mut W, input: &mut R, mut text: &mut String, openee: &str) -> io::Result<()> where W: Write, R: BufRead {
+    try!(output.write(openee.as_bytes()));
+    try!(output.write(PROMPT.as_bytes()));
+    try!(output.flush());
+    input.read_line(&mut text).map(|_| ())
+}
+
 fn main() {
     // make a new context to make functions on
     let mut ctx = Context::new();
@@ -171,26 +186,21 @@ fn main() {
         open_file(&mut ctx, script);
     } else {
         // get i/o streams
-        let input = io::stdin();
+        let mut input = BufReader::new(io::stdin());
         let mut output = io::stdout();
         // buffer for temporary strings
         let mut line = String::new();
         loop {
-            // print out a prompt for the REPL
-            output.write(PROMPT.as_bytes()).unwrap();
-            output.flush().unwrap();
-            // read a line of input into `line`
-            input.read_line(&mut line).unwrap();
+            // prompt for a line of input
+            prompt(&mut output, &mut input, &mut line).unwrap();
             // special cases
             match line.trim() {
                 "file" => {
-                    println!("Please enter a file path to open:");
-                    input.read_line(&mut line).unwrap();
+                    prompt_for(&mut output, &mut input, &mut line, "path to a file").unwrap();
                     open_file(&mut ctx, &line);
                 },
                 "url" => {
-                    println!("Please enter a URL to open:");
-                    input.read_line(&mut line).unwrap();
+                    prompt_for(&mut output, &mut input, &mut line, "URL").unwrap();
                     let client = Client::new();
                     let mut res = client.get(&line).send().unwrap();
                     res.read_to_string(&mut line).unwrap();
