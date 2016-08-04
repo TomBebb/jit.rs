@@ -9,7 +9,10 @@ use std::mem;
 pub struct Position(f64, f64);
 impl<'a> Compile<'a> for Position {
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-        func.insn_of(())
+        let val = Val::new(func, &Self::get_type());
+        func.insn_store_relative(val, 0, func.insn_of(self.0));
+        func.insn_store_relative(val, 8, func.insn_of(self.1));
+        val
     }
     fn get_type() -> CowType<'a> {
         let f64_t = get::<f64>();
@@ -17,17 +20,6 @@ impl<'a> Compile<'a> for Position {
     }
 }
 
-impl<'a, 'b> Compile<'a> for &'b Position {
-    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-        let c = func.insn_alloca_of::<Position>();
-        func.insn_store_relative(c, 0, func.insn_of(self.0));
-        func.insn_store_relative(c, mem::size_of::<f64>(), func.insn_of(self.1));
-        c
-    }
-    fn get_type() -> CowType<'a> {
-        Type::new_pointer(&Position::get_type()).into()
-    }
-}
 
 #[test]
 fn test_struct() {

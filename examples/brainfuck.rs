@@ -148,10 +148,9 @@ fn run(ctx: &mut Context, code: &str) {
     // generate the IR for the code
     generate(&func, code);
     // compile the code and run it
-    UncompiledFunction::compile(func).with(|func:extern fn(*mut Cell)| {
-        let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
-        func(data.as_mut_ptr());
-    });
+    let func = UncompiledFunction::compile(func);
+    let mut data: [Cell; 3000] = unsafe { mem::zeroed() };
+    let _: () = func.apply1(data.as_mut_ptr());
 }
 /// Read the contents of `file` as UTF-8 and run it as brainfuck code using
 /// the context `ctx`

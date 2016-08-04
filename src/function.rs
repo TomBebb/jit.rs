@@ -14,7 +14,7 @@ use std::os::raw::{
     c_void
 };
 use std::default::Default;
-use std::fmt;
+use std::{fmt, intrinsics};
 use std::ops::{Deref, DerefMut, Index};
 use std::{mem, ptr};
 use std::ffi::CString;
@@ -73,6 +73,32 @@ impl Func {
         unsafe { from_ptr(jit_function_get_signature(self.into())) }
     }
 }
+
+pub struct Closure<A, R> {
+    _marker: PhantomData<[()]>,
+    _marker2: PhantomData<(A, R)>
+}
+
+impl<A, R> FnOnce<A> for Closure<A, R> {
+    type Output = R;
+    extern "rust-call" fn call_once(self, _: A) -> R {
+        unsafe { intrinsics::unreachable() };
+    }
+}
+
+impl<A, R> FnMut<A> for Closure<A, R> {
+    extern "rust-call" fn call_mut(&mut self, args: A) -> R {
+        let func: fn(A) -> R = unsafe { mem::transmute(self) };
+        func(args)
+    }
+}
+impl<A, R> Fn<A> for Closure<A, R> {
+    extern "rust-call" fn call(&self, args: A) -> R {
+        let func: fn(A) -> R = unsafe { mem::transmute(self) };
+        func(args)
+    }
+}
+
 /// A function which has already been compiled from an `UncompiledFunction`, so it can
 /// be called but not added to.
 ///
@@ -102,10 +128,26 @@ impl fmt::Debug for CompiledFunction {
 }
 impl CompiledFunction {
     /// Run a closure with the compiled function as an argument
-    pub fn with<A, R, F:FnOnce(extern "C" fn(A) -> R)>(&self, cb:F) {
-        cb(unsafe {
-            mem::transmute(jit_function_to_closure(self.into()))
-        })
+    pub unsafe fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Closure<A, R> {
+        mem::transmute(jit_function_to_closure((&*func).into()))
+    }
+    /// Run the compiled function with no arguments
+    pub fn apply0<'a, R>(&'a self) -> R {
+        unsafe {
+            let mut args = [];
+            let mut ret: R = mem::uninitialized();
+            jit_function_apply(self.into(), args.as_mut_ptr() as *mut *mut c_void, mem::transmute(&mut ret));
+            ret
+        }
+    }
+    /// Run the compiled function with a single argument.
+    pub fn apply1<'a, A, R>(&'a self, arg: A) -> R {
+        unsafe {
+            let mut args = [arg];
+            let mut ret: R = mem::uninitialized();
+            jit_function_apply(self.into(), args.as_mut_ptr() as *mut *mut c_void, mem::transmute(&mut ret));
+            ret
+        }
     }
 }
 
@@ -704,9 +746,11 @@ impl UncompiledFunction {
 
     /// Call the function, which may or may not be translated yet
     pub fn insn_call(&self, name:Option<&str>, func:&Func, sig:Option<&Ty>,
-        args: &mut [&Val], flags: flags::CallFlags) -> &Val {
+        args: &[&Val], flags: flags::CallFlags) -> &Val {
         unsafe {
-            let mut native_args:&mut [jit_value_t] = mem::transmute(args);
+            let native_args: &[jit_value_t] = mem::transmute(args);
+            let mut native_args: Vec<jit_value_t> = native_args.to_owned();
+            native_args.push(mem::zeroed());
             let c_name = name.map(|name| CString::new(name.as_bytes()).unwrap());
             let sig = mem::transmute(sig);
             from_ptr(jit_insn_call(
@@ -722,9 +766,14 @@ impl UncompiledFunction {
     /// Make an instruction that calls a function that has the signature given
     /// with some arguments through a pointer to the function
     pub fn insn_call_indirect(&self, func:&Val, signature: &Ty,
-                               args: &mut [&Val], flags: flags::CallFlags) -> &Val {
+                               args: &[&Val], flags: flags::CallFlags) -> &Val {
+        if cfg!(debug_assertions) && !func.get_type().is_signature() {
+            panic!("value of this type cannot be called {:?}", func);
+        }
         unsafe {
-            let mut native_args: &mut [jit_value_t] = mem::transmute(args);
+            let native_args: &[jit_value_t] = mem::transmute(args);
+            let mut native_args: Vec<jit_value_t> = native_args.to_owned();
+            native_args.push(mem::zeroed());
             from_ptr(jit_insn_call_indirect(
                 self.into(),
                 func.into(),
@@ -737,7 +786,7 @@ impl UncompiledFunction {
     }
     /// Make an instruction that calls a native function that has the signature
     /// given with some arguments
-    fn insn_call_native(&self, name: Option<&str>,
+    pub fn insn_call_native(&self, name: Option<&str>,
                         native_func: *mut c_void, signature: &Ty,
                         args: &mut [&Val], flags: flags::CallFlags) -> &Val {
         if cfg!(debug_assertions) {
@@ -1003,13 +1052,5 @@ impl UncompiledFunction {
             jit_function_compile(ptr);
             CSemiBox::new(ptr)
         }
-    }
-    #[inline(always)]
-    /// Compile the function and call a closure with it directly
-    pub fn compile_with<'a, A, R, F>(func: CSemiBox<'a, UncompiledFunction>, cb: F) -> CSemiBox<'a, CompiledFunction>
-        where F:FnOnce(extern fn(A) -> R) {
-        let compiled = UncompiledFunction::compile(func);
-        compiled.with(cb);
-        compiled
     }
 }

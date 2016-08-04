@@ -1,7 +1,7 @@
 use function::UncompiledFunction;
 use function::Abi::CDecl;
 use types::get;
-use std::os::raw::{c_long, c_char};
+use std::os::raw::c_long;
 use types::{consts, CowType, Type};
 use util::from_ptr;
 use value::Val;
@@ -44,6 +44,40 @@ compile_prims!{
     (char, c_long) => (get_sys_char, jit_value_create_nint_constant)
 }
 impl<'a, T> Compile<'a> for *const T where T:Compile<'a> + Sized + 'a {
+    #[inline(always)]
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        unsafe {
+            let ty = Self::get_type();
+            jit_value_create_nint_constant(
+                func.into(),
+                (&*ty).into(),
+                mem::transmute(self)
+            ).into()
+        }
+    }
+    #[inline(always)]
+    fn get_type() -> CowType<'a> {
+        Type::new_pointer(&get::<T>()).into()
+    }
+}
+impl<'a, T> Compile<'a> for &'a mut T where T:Compile<'a> + Sized + 'a {
+    #[inline(always)]
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        unsafe {
+            let ty = Self::get_type();
+            jit_value_create_nint_constant(
+                func.into(),
+                (&*ty).into(),
+                mem::transmute(self)
+            ).into()
+        }
+    }
+    #[inline(always)]
+    fn get_type() -> CowType<'a> {
+        Type::new_pointer(&get::<T>()).into()
+    }
+}
+impl<'a, T> Compile<'a> for &'a T where T:Compile<'a> + Sized + 'a {
     #[inline(always)]
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
         unsafe {

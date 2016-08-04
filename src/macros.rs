@@ -32,10 +32,9 @@ impl<'a> Compile<'a> for $ty {
 });
 );
 macro_rules! compile_ptr(
-    ($func:expr, $ptr:expr) => (unsafe {
+    ($func:expr, $ptr:expr, $ty:expr) => (unsafe {
         use std::mem;
-        let ptr = mem::transmute::<_, usize>($ptr);
-        ptr.compile($func)
+        jit_value_create_nint_constant($func.into(), $ty.into(), mem::transmute($ptr)).into()
     })
 );
 macro_rules! compile_func(
@@ -43,7 +42,7 @@ macro_rules! compile_func(
         impl<'a, $($arg:Compile<'a>,)* R:Compile<'a>> Compile<'a> for $sig {
             #[inline(always)]
             fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-                compile_ptr!(func, self)
+                compile_ptr!(func, self, &*Self::get_type())
             }
             #[inline(always)]
             fn get_type() -> CowType<'a> {
@@ -53,7 +52,7 @@ macro_rules! compile_func(
         impl<'a, $($arg:Compile<'a>,)* R:Compile<'a>> Compile<'a> for $ext_sig {
             #[inline(always)]
             fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-                compile_ptr!(func, self)
+                func.insn_convert(compile_ptr!(func, self, &*Self::get_type()), &Self::get_type(), false)
             }
             #[inline(always)]
             fn get_type() -> CowType<'a> {
