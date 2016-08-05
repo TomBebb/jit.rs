@@ -582,6 +582,27 @@ impl Ty {
             jit_type_is_tagged(self.into()) != 0
         }
     }
+    #[inline(always)]
+    /// Normalize this type into its basic numeric form and remove tags
+    pub fn normalize(&self) -> Type {
+        unsafe {
+            jit_type_normalize(self.into()).into()
+        }
+    }
+    #[inline(always)]
+    /// If this type is an integer, return the machine-length integer type
+    pub fn promote_int(&self) -> Type {
+        unsafe {
+            jit_type_normalize(self.into()).into()
+        }
+    }
+    #[inline(always)]
+    /// Remove tags and return the new type
+    pub fn remove_tags(&self) -> Type {
+        unsafe {
+            jit_type_remove_tags(self.into()).into()
+        }
+    }
 }
 impl<'a> IntoIterator for &'a Ty {
     type IntoIter = Fields<'a>;
