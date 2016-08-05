@@ -1014,15 +1014,15 @@ impl UncompiledFunction {
         }
     }
     /// Get the entry block of this function
-    pub fn get_entry(&self) -> Option<Block> {
+    pub fn get_entry(&self) -> Option<&Block> {
         unsafe {
-            from_ptr_opt(jit_function_get_entry(self.into()))
+            from_ptr_opt(jit_function_get_entry(self.into()) as jit_block_t)
         }
     }
     /// Get the current block of this function
-    pub fn get_current(&self) -> Option<Block> {
+    pub fn get_current(&self) -> Option<&Block> {
         unsafe {
-            from_ptr_opt(jit_function_get_current(self.into()))
+            from_ptr_opt(jit_function_get_current(self.into()) as jit_block_t)
         }
     }
     #[inline(always)]

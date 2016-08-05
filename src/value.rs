@@ -3,8 +3,9 @@ use function::UncompiledFunction;
 use types::*;
 use context::{Context, ContextMember};
 use std::marker::PhantomData;
-use std::fmt;
+use std::{fmt, mem, ptr};
 use std::ops::*;
+use util;
 /// Vals form the backbone of the storage system in `LibJIT`
 ///
 /// Every value in the system, be it a constant, a local variable, or a
@@ -15,7 +16,10 @@ pub struct Val(PhantomData<[()]>);
 native_ref!(&Val = jit_value_t);
 impl fmt::Debug for Val {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        write!(fmt, "v({:?})", self.get_type())
+        let func = self.get_function();
+        write!(fmt, "{}", try!(util::dump(|fd| unsafe {
+            jit_dump_value(mem::transmute(fd), func.into(), self.into(), ptr::null());
+        })))
     }
 }
 impl ContextMember for Val {
