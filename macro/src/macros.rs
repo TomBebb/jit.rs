@@ -632,7 +632,7 @@ macro_rules! jit_func(
             $($st;)+
         };
         let compiled = UncompiledFunction::compile(func);
-        unsafe { CompiledFunction::to_closure::<(), $ret>(compiled) }
+        CompiledFunction::to_closure::<(), $ret>(compiled)
     });
     ($ctx:expr, $name:ident, fn($($arg:ident:$ty:ty),+) -> $ret:ty {$($st:stmt;)+}, $value:expr) => ({
         let sig = get::<fn($($ty),+) -> $ret>();
@@ -647,6 +647,6 @@ macro_rules! jit_func(
             $($st;)+
         };
         let compiled = UncompiledFunction::compile(func);
-        unsafe { CompiledFunction::to_closure::<($($ty),+), $ret>(compiled) }
+        CompiledFunction::to_closure::<($($ty),+), $ret>(compiled)
     });
 );

@@ -59,7 +59,7 @@ std::os::raw::c_int;
 pub struct Func(PhantomData<[()]>);
 native_ref!(&Func = jit_function_t);
 impl ContextMember for Func {
-    fn context(&self) -> &Context {
+    fn get_context(&self) -> &Context {
         unsafe { jit_function_get_context(self.into()).into() }
     }
 }
@@ -1035,4 +1035,10 @@ impl UncompiledFunction {
             CSemiBox::new(ptr)
         }
     }
+}
+
+/// To be implemented by any type that is a member of a function
+pub trait FunctionMember {
+    /// Get the function containing this value.
+    fn get_function(&self) -> &UncompiledFunction;
 }

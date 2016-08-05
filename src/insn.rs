@@ -1,6 +1,8 @@
 use raw::*;
-use function::UncompiledFunction;
+use context::{Context, ContextMember};
+use function::{UncompiledFunction, FunctionMember};
 use types::Ty;
+use label::Label;
 use util::{from_ptr, from_ptr_opt};
 use value::Val;
 use std::{ffi, fmt, mem, str};
@@ -10,6 +12,20 @@ use std::marker::PhantomData;
 pub struct Instruction(PhantomData<[()]>);
 native_ref!(&Instruction = jit_insn_t);
 
+impl ContextMember for Instruction {
+	fn get_context(&self) -> &Context {
+		unsafe {
+			from_ptr(jit_block_get_context(self.into()))
+		}
+	}
+}
+impl FunctionMember for Instruction {
+	fn get_function(&self) -> &UncompiledFunction {
+		unsafe {
+			from_ptr(jit_block_get_function(self.into()))
+		}
+	}
+}
 impl Instruction {
 	/// Get the opcode of the instruction
 	pub fn get_opcode(&self) -> i32 {
@@ -87,8 +103,25 @@ impl<'a> Iterator for InstructionIter<'a> {
 /// Represents a single LibJIT block
 pub struct Block(PhantomData<[()]>);
 native_ref!(&Block = jit_block_t);
-
+impl ContextMember for Block {
+	fn get_context(&self) -> &Context {
+		self.get_function().get_context()
+	}
+}
+impl FunctionMember for Block {
+	fn get_function(&self) -> &UncompiledFunction {
+		unsafe {
+			from_ptr(jit_block_get_function(self.into()))
+		}
+	}
+}
 impl Block {
+	/// Get the block corresponding to a particular label
+	pub fn from_label<'a>(func: &'a UncompiledFunction, label: Label<'a>) -> Option<&'a Block> {
+		unsafe {
+			from_ptr_opt(jit_block_from_label(func.into(), *label))
+		}
+	}
 	/// Get the function containing this block
 	pub fn get_function(&self) -> &UncompiledFunction {
 		unsafe {

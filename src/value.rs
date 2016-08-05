@@ -24,7 +24,7 @@ impl fmt::Debug for Val {
 }
 impl ContextMember for Val {
     /// Get the context this value is contained in
-    fn context(&self) -> &Context<()> {
+    fn get_context(&self) -> &Context<()> {
         unsafe { jit_value_get_context(self.into()).into() }
     }
 }
