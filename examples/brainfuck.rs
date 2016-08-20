@@ -19,15 +19,6 @@ extern {
     fn getchar() -> raw::c_int;
 }
 
-/// Print a character to stdout.
-extern fn put_char(c: Cell) {
-    unsafe { putchar(c as raw::c_int) }
-}
-/// Read a character from stdout.
-extern fn get_char() -> Cell {
-    unsafe { getchar() as Cell }
-}
-
 const PROMPT:&'static str = "> ";
 type WrappedLoop<'a> = Rc<RefCell<Loop<'a>>>;
 /// This type represents a single pair of '[' and ']' in brainfuck code
@@ -74,48 +65,50 @@ fn count<'a, I>(code: &mut Peekable<I>, curr:char) -> usize where I:Iterator<Ite
 }
 
 /// Generate the IR for the brainfuck code `code` into the function `func`.
-fn generate<'a>(func: &UncompiledFunction, code: &str) {
+fn generate<'a>(func: &'a UncompiledFunction, code: &str) {
     // get the LibJIT equivalents of essential types.
     println!("compiling {}", code);
     let cell_t = get::<Cell>();
     let cell_size = mem::size_of::<Cell>();
-    let putchar_sig = get::<fn(Cell)>();
-    let getchar_sig = get::<fn() -> Cell>();
-    let ref data = func[0];
+    let mut data = func.insn_dup(&func[0]);
     let mut current_loop = None;
     let mut code = code.chars().peekable();
+    let put_char = |c: Cell| unsafe {
+        putchar(c as raw::c_int)
+    };
+    let get_char = || unsafe {
+        getchar() as Cell
+    };
     while let Some(c) = code.next() {
         match c {
             '>' => {
                 let amount = count(&mut code, c);
-                let new_value = data + func.insn_of(cell_size * amount);
-                func.insn_store(data, new_value);
+                data += cell_size * amount;
             },
             '<' => {
                 let amount = count(&mut code, c);
-                let new_value = data - func.insn_of(cell_size * amount);
-                func.insn_store(data, new_value);
+                data -= cell_size * amount;
             },
             '+' => {
                 let amount = count(&mut code, c);
                 let mut value = func.insn_load_relative(data, 0, &cell_t);
-                value = value + func.insn_of(cell_size * amount);
+                value += cell_size * amount;
                 value = func.insn_convert(value, &cell_t, false);
                 func.insn_store_relative(data, 0, value)
             },
             '-' => {
                 let amount = count(&mut code, c);
                 let mut value = func.insn_load_relative(data, 0, &cell_t);
-                value = value - func.insn_of(cell_size * amount);
+                value -= cell_size * amount;
                 value = func.insn_convert(value, &cell_t, false);
                 func.insn_store_relative(data, 0, value)
             },
             '.' => {
                 let value = func.insn_load_relative(data, 0, &cell_t);
-                func.insn_call_native1(Some("putchar"), put_char, &putchar_sig, [value], flags::NO_THROW);
+                func.insn_call_rust(Some("putchar"), &put_char, &[value], flags::NO_THROW);
             },
             ',' => {
-                let value = func.insn_call_native0(Some("getchar"), get_char, &getchar_sig, flags::NO_THROW);
+                let value = func.insn_call_rust(Some("getchar"), &get_char, &[], flags::NO_THROW);
                 func.insn_store_relative(data, 0, value);
             },
             '[' => {

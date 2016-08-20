@@ -8,14 +8,13 @@ use jit::*;
 pub struct Position(f64, f64);
 impl<'a> Compile<'a> for Position {
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-        let val = Val::new(func, &Self::get_type());
-        func.insn_store_relative(val, 0, func.insn_of(self.0));
-        func.insn_store_relative(val, 8, func.insn_of(self.1));
-        val
+        Val::new_struct(func, &Self::get_type(), &[func.insn_of(self.0), func.insn_of(self.1)])
     }
     fn get_type() -> CowType<'a> {
         let f64_t = get::<f64>();
-        Type::new_struct(&mut [&f64_t, &f64_t]).into()
+        let mut ty = Type::new_struct(&mut [&f64_t, &f64_t]);
+        ty.set_names(&["x", "y"]);
+        ty.into()
     }
 }
 
@@ -23,17 +22,27 @@ impl<'a> Compile<'a> for Position {
 #[test]
 fn test_struct() {
     let mut ctx = Context::<()>::new();
-    jit_func!(&mut ctx, func, fn(pos: *const Position, mult: f64) -> () {
-        let f64_t = get::<f64>();
-        let mut x = func.insn_load_relative(pos, 0, &f64_t);
-        let mut y = func.insn_load_relative(pos, f64_t.get_size(), &f64_t);
-        x = func.insn_mul(x, mult);
-        y = func.insn_mul(y, mult);
-        func.insn_store_relative(pos, 0, x);
-        func.insn_store_relative(pos, f64_t.get_size(), y);
+    jit_func!(&mut ctx, func, fn(pos: *mut Position, mult: f64) -> () {
+        let mut x = &pos["x"];
+        let mut y = &pos["y"];
+        x *= mult;
+        y *= mult;
     }, {
-        let pos = Position(1., 2.);
-        func(&pos, 2.);
+        let mut pos = Position(1., 2.);
+        func(&mut pos, 2.);
         assert_eq!(pos, Position(2., 4.));
+    });
+}
+
+#[test]
+fn test_tuple() {
+    let mut ctx = Context::<()>::new();
+    jit_func!(&mut ctx, func, fn(thing: *const (i32, i32)) -> i32 {
+        let x = &thing[0];
+        let y = &thing[1];
+        func.insn_return(x * y);
+    }, {
+        assert_eq!(func(&(2, 5)), 10);
+        assert_eq!(func(&(1, -32)), -32);
     });
 }

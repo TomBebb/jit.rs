@@ -1,6 +1,7 @@
 use raw::*;
 use function::UncompiledFunction;
 use types::*;
+use compile::Compile;
 use context::{Context, ContextMember};
 use std::marker::PhantomData;
 use std::{fmt, mem, ptr};
@@ -43,6 +44,14 @@ impl Val {
             jit_value_create(func.into(), value_type.into()).into()
         }
     }
+    /// Create a new instance of the struct `ty` in `func` with the fields `fields`.
+    pub fn new_struct<'a>(func: &'a UncompiledFunction, ty: &Ty, fields: &[&'a Val]) -> &'a Val {
+        let value = Val::new(func, ty);
+        for (index, field) in ty.fields().enumerate() {
+            func.insn_store_relative(value, field.get_offset(), fields[index])
+        }
+        value
+    }
     /// Get the type of the value
     pub fn get_type(&self) -> &Ty {
         unsafe {
@@ -81,12 +90,65 @@ impl Val {
         }
     }
 }
+impl Index<usize> for Val {
+    type Output = Val;
+    fn index(&self, index: usize) -> &Val {
+        let func = self.get_function();
+        let mut ty = self.get_type();
+        while let Some(elem) = ty.get_ref() {
+            ty = elem;
+        }
+        if !ty.is_struct() {
+            panic!("{:?} cannot be indexed", ty);
+        } else if let Some(field) = ty.fields().nth(index) {
+            func.insn_load_relative(self, field.get_offset(), field.get_type())
+        } else {
+            panic!("unknown index {} on {:?}", index, ty)
+        }
+    }
+}
+impl<'a> Index<&'a str> for Val {
+    type Output = Val;
+    fn index(&self, index: &'a str) -> &Val {
+        let func = self.get_function();
+        let mut ty = self.get_type();
+        while let Some(elem) = ty.get_ref() {
+            ty = elem;
+        }
+        if !ty.is_struct() {
+            panic!("{:?} cannot be indexed", ty);
+        } else if let Some(field) = ty.get_field(index) {
+            func.insn_load_relative(self, field.get_offset(), field.get_type())
+        } else {
+            panic!("unknown field {:?} on {:?}", index, ty)
+        }
+    }
+}
 macro_rules! bin_op {
-    ($trait_ty:ident, $trait_func:ident, $func:ident) => (
+    ($trait_ty:ident, $trait_func:ident, $assign_ty:ident, $assign_func:ident, $func:ident) => (
         impl<'a> $trait_ty<&'a Val> for &'a Val {
             type Output = &'a Val;
             fn $trait_func(self, other: &'a Val) -> &'a Val {
                 self.get_function().$func(self, other)
+            }
+        }
+        impl<'a, T> $trait_ty<T> for &'a Val where T: Compile<'a> {
+            type Output = &'a Val;
+            fn $trait_func(self, other: T) -> &'a Val {
+                let func = self.get_function();
+                func.$func(self, func.insn_of(other))
+            }
+        }
+        impl<'a> $assign_ty<&'a Val> for &'a Val {
+            fn $assign_func(&mut self, other: &'a Val) {
+                let func = self.get_function();
+                func.insn_store(*self, func.$func(self, other));
+            }
+        }
+        impl<'a, T> $assign_ty<T> for &'a Val where T: Compile<'a> {
+            fn $assign_func(&mut self, other: T) {
+                let func = self.get_function();
+                func.insn_store(*self, func.$func(self, func.insn_of(other)));
             }
         }
     )
@@ -101,15 +163,15 @@ macro_rules! un_op {
         }
     )
 }
-bin_op!{Add, add, insn_add}
-bin_op!{BitAnd, bitand, insn_and}
-bin_op!{BitOr, bitor, insn_or}
-bin_op!{BitXor, bitxor, insn_xor}
-bin_op!{Div, div, insn_div}
-bin_op!{Mul, mul, insn_mul}
-bin_op!{Rem, rem, insn_rem}
-bin_op!{Shl, shl, insn_shl}
-bin_op!{Shr, shr, insn_shr}
-bin_op!{Sub, sub, insn_sub}
+bin_op!{Add, add, AddAssign, add_assign, insn_add}
+bin_op!{BitAnd, bitand, BitAndAssign, bitand_assign, insn_and}
+bin_op!{BitOr, bitor, BitOrAssign, bitor_assign, insn_or}
+bin_op!{BitXor, bitxor, BitXorAssign, bitxor_assign, insn_xor}
+bin_op!{Div, div, DivAssign, div_assign, insn_div}
+bin_op!{Mul, mul, MulAssign, mul_assign, insn_mul}
+bin_op!{Rem, rem, RemAssign, rem_assign, insn_rem}
+bin_op!{Shl, shl, ShlAssign, shl_assign, insn_shl}
+bin_op!{Shr, shr, ShrAssign, shr_assign, insn_shr}
+bin_op!{Sub, sub, SubAssign, sub_assign, insn_sub}
 un_op!{Neg, neg, insn_neg}
 un_op!{Not, not, insn_not}

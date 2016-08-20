@@ -3,7 +3,8 @@ extern crate jit_macros;
 extern crate jit;
 use jit::*;
 
-pub fn main() {
+#[test]
+pub fn test_fib() {
 	// make a new JIT context, with no metadata
 	let mut ctx = Context::<()>::new();
 	// make a function in this context with signature `fn(u64) -> u64`

@@ -60,6 +60,23 @@ impl<'a, T> Compile<'a> for *const T where T:Compile<'a> + Sized + 'a {
         Type::new_pointer(&get::<T>()).into()
     }
 }
+impl<'a, T> Compile<'a> for *mut T where T:Compile<'a> + Sized + 'a {
+    #[inline(always)]
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        unsafe {
+            let ty = Self::get_type();
+            jit_value_create_nint_constant(
+                func.into(),
+                (&*ty).into(),
+                mem::transmute(self)
+            ).into()
+        }
+    }
+    #[inline(always)]
+    fn get_type() -> CowType<'a> {
+        Type::new_pointer(&get::<T>()).into()
+    }
+}
 impl<'a, T> Compile<'a> for &'a mut T where T:Compile<'a> + Sized + 'a {
     #[inline(always)]
     fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
@@ -130,6 +147,16 @@ impl<'a> Compile<'a> for &'a str {
             jit_type_set_size_and_alignment((&ty).into(), mem::size_of::<*mut str>() as i64, mem::align_of::<*mut str>() as i64);
         }
         ty.into()
+    }
+}
+impl<'a, T> Compile<'a> for (T, ) where T: Compile<'a> {
+    #[inline(always)]
+    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
+        self.0.compile(func)
+    }
+    #[inline(always)]
+    fn get_type() -> CowType<'a> {
+        T::get_type()
     }
 }
 compile_tuple!(A, B => a, b);

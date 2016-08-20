@@ -5,10 +5,9 @@ use label::Label;
 use types::Ty;
 use insn::Block;
 use value::Val;
-use util::{self, from_ptr, from_ptr_opt};
+use util::{self, CString, from_ptr, from_ptr_opt};
 use cbox::{CSemiBox, DisposeRef};
 use std::os::raw::{
-    c_char,
     c_int,
     c_uint,
     c_void
@@ -17,7 +16,7 @@ use std::default::Default;
 use std::fmt;
 use std::ops::{Deref, DerefMut, Index};
 use std::{mem, ptr};
-use std::ffi::CString;
+
 use std::marker::PhantomData;
 /// A platform's application binary interface
 ///
@@ -298,6 +297,8 @@ impl UncompiledFunction {
     /// let mut ctx = Context::<()>::new();
     /// let func = UncompiledFunction::new(&mut ctx, &get::<fn() -> i32>());
     /// func.insn_return(func.insn_of(42i32));
+    /// let func = func.compile();
+    /// assert_eq!(func.to_closure::<(), i32>()(), 42)
     /// ```
     pub fn insn_of<'a, T>(&'a self, val:T) -> &'a Val where T:Compile<'a> {
         val.compile(self)
@@ -729,15 +730,15 @@ impl UncompiledFunction {
     /// Call the function, which may or may not be translated yet
     pub fn insn_call(&self, name:Option<&str>, func:&Func, sig:Option<&Ty>,
         args: &[&Val], flags: flags::CallFlags) -> &Val {
+        let c_name = name.map(CString::from);
         unsafe {
             let native_args: &[jit_value_t] = mem::transmute(args);
             let mut native_args: Vec<jit_value_t> = native_args.to_owned();
             native_args.push(mem::zeroed());
-            let c_name = name.map(|name| CString::new(name.as_bytes()).unwrap());
             let sig = mem::transmute(sig);
             from_ptr(jit_insn_call(
                 self.into(),
-                c_name.map(|name| name.as_bytes().as_ptr() as *mut c_char).unwrap_or(ptr::null_mut()),
+                c_name.map(|c| c.as_ptr()).unwrap_or(ptr::null()),
                 func.into(), sig, native_args.as_mut_ptr(),
                 native_args.len() as c_uint,
                 flags.bits()
@@ -768,93 +769,83 @@ impl UncompiledFunction {
     }
     /// Make an instruction that calls a native function that has the signature
     /// given with some arguments
-    pub fn insn_call_native(&self, name: Option<&str>,
-                        native_func: *mut c_void, signature: &Ty,
-                        args: &mut [&Val], flags: flags::CallFlags) -> &Val {
+    pub unsafe fn insn_call_native(&self, name: Option<&str>,
+                        func: *mut (), signature: &Ty, args: &[&Val], flags: flags::CallFlags) -> &Val {
+        let c_sig: jit_type_t = signature.into();
+        let c_name = name.map(CString::from);
+        from_ptr(jit_insn_call_native(
+            self.into(),
+            c_name.map(|c| c.as_ptr()).unwrap_or(ptr::null()),
+            func as *mut c_void,
+            c_sig as *mut c_void,
+            args.as_ptr() as *mut jit_value_t,
+            args.len() as c_uint,
+            flags.bits()
+        ))
+    }
+    /// Make an instruction that calls a rust closure that has the signature
+    /// given with some arguments
+    pub fn insn_call_rust<'a, A, R, F>(&'a self, name: Option<&str>,
+                        func: &'a F,
+                        args: &[&Val], flags: flags::CallFlags) -> &Val where F:Fn<A, Output = R> + Sized, A:Compile<'a>, R:Compile<'a> {
+        let signature = ::get::<fn(*const (), A) -> R>();
+        let func_v = unsafe { mem::transmute::<_, *const ()>(func) }.compile(self);
+        let mut args = Vec::from(args);
+        args.insert(0, func_v.into());
+        /*
         if cfg!(debug_assertions) {
-            let name = name.unwrap_or("unnamed function");
-            if !signature.is_signature() {
-                panic!("Bad signature for {} - expected signature, got {:?}", name, signature)
-            }
             let num_sig_args = signature.params().count();
             if args.len() != num_sig_args {
-                panic!("Bad arguments to {} - expected {}, got {}", name, num_sig_args, args.len());
+                panic!("Bad arguments to {:?} - expected {}, got {}", name, num_sig_args, args.len());
             }
-            for (index, (arg, param)) in args.iter().zip(signature.params()).enumerate() {
+            for (index, (arg, param)) in args.iter().zip(signature.params()).enumerate().skip(1) {
                 let ty = arg.get_type();
                 if ty != param {
-                    panic!("Bad argument #{} to {} - expected {:?}, got {:?}", index, name, param, ty);
+                    panic!("Bad argument #{} to {:?} - expected {:?}, got {:?}", index, name, param, ty);
                 }
             }
-        }
+        }*/
         unsafe {
-            let mut native_args:&mut [jit_value_t] = mem::transmute(args);
-            let c_name = name.map(|name| CString::new(name.as_bytes()).unwrap());
-            from_ptr(jit_insn_call_native(
-                self.into(),
-                c_name.map(|name| name.as_bytes().as_ptr() as *mut c_char).unwrap_or(ptr::null_mut()),
-                native_func,
-                signature.into(),
-                native_args.as_mut_ptr(),
-                native_args.len() as c_uint,
-                flags.bits()
-            ))
+            self.insn_call_native(
+                name,
+                mem::transmute(F::call as extern "rust-call" fn(&F, A) -> R),
+                &signature,
+                &args,
+                flags
+            )
         }
     }
-    #[inline(always)]
-    /// Make an instruction that calls a Rust function that has the signature
-    /// given with no arguments and expects a return value
-    pub fn insn_call_native0<R>(&self, name: Option<&str>,
-                            native_func: extern fn() -> R,
-                            signature: &Ty,
-                            flags: flags::CallFlags) -> &Val {
-        let func_ptr = unsafe { mem::transmute(native_func) };
-        self.insn_call_native(name, func_ptr, signature, &mut [], flags)
-    }
-    #[inline(always)]
-    /// Make an instruction that calls a Rust function that has the signature
-    /// given with a single argument and expects a return value
-    pub fn insn_call_native1<A,R>(&self, name: Option<&str>,
-                                native_func: extern fn(A) -> R,
-                                signature: &Ty,
-                                mut args: [&Val; 1],
-                                flags: flags::CallFlags) -> &Val {
-        let func_ptr = unsafe { mem::transmute(native_func) };
-        self.insn_call_native(name, func_ptr, signature, &mut args, flags)
-    }
-    #[inline(always)]
-    /// Make an instruction that calls a Rust function that has the signature
-    /// given with two arguments and expects a return value
-    pub fn insn_call_native2<A,B,R>(&self, name: Option<&str>,
-                                native_func: extern fn(A, B) -> R,
-                                signature: &Ty,
-                                mut args: [&Val; 2],
-                                flags: flags::CallFlags) -> &Val {
-        let func_ptr = unsafe { mem::transmute(native_func) };
-        self.insn_call_native(name, func_ptr, signature, &mut args, flags)
-    }
-    #[inline(always)]
-    /// Make an instruction that calls a Rust function that has the signature
-    /// given with three arguments and expects a return value
-    pub fn insn_call_native3<A,B,C,R>(&self, name: Option<&str>,
-                                native_func: extern fn(A, B, C) -> R,
-                                signature: &Ty,
-                                mut args: [&Val; 3],
-                                flags: flags::CallFlags) -> &Val {
-        let func_ptr = unsafe { mem::transmute(native_func) };
-        self.insn_call_native(name, func_ptr, signature, &mut args, flags)
-    }
-    #[inline(always)]
-    /// Make an instruction that calls a Rust function that has the signature
-    /// given with four arguments and expects a return value
-    pub fn insn_call_native4<A,B,C,D,R>(&self, name: Option<&str>,
-                                native_func: extern fn(A, B, C, D) -> R,
-                                signature: &Ty,
-                                mut args: [&Val; 4],
-                                flags: flags::CallFlags) -> &Val {
-        let func_ptr = unsafe { mem::transmute(native_func) };
-        self.insn_call_native(name, func_ptr, signature, &mut args
-            , flags)
+    /// Make an instruction that calls a rust closure that has the signature
+    /// given with some arguments
+    pub fn insn_call_rust_mut<'a, A, R, F>(&'a self, name: Option<&str>,
+                        func: &'a mut F,
+                        args: &[&Val], flags: flags::CallFlags) -> &Val where F:FnMut<A, Output = R> + Sized, A:Compile<'a>, R:Compile<'a> {
+        let signature = ::get::<fn(*const (), A) -> R>();
+        let func_v = unsafe { mem::transmute::<_, *const ()>(func) }.compile(self);
+        let mut args = Vec::from(args);
+        args.insert(0, func_v.into());
+        /*
+        if cfg!(debug_assertions) {
+            let num_sig_args = signature.params().count();
+            if args.len() != num_sig_args {
+                panic!("Bad arguments to {:?} - expected {}, got {}", name, num_sig_args, args.len());
+            }
+            for (index, (arg, param)) in args.iter().zip(signature.params()).enumerate().skip(1) {
+                let ty = arg.get_type();
+                if ty != param {
+                    panic!("Bad argument #{} to {:?} - expected {:?}, got {:?}", index, name, param, ty);
+                }
+            }
+        }*/
+        unsafe {
+            self.insn_call_native(
+                name,
+                mem::transmute(F::call_mut as extern "rust-call" fn(&mut F, A) -> R),
+                &signature,
+                &args,
+                flags
+            )
+        }
     }
     #[inline(always)]
     /// Make an instruction that copies `size` bytes from the `source` address to the `dest` address
@@ -889,7 +880,8 @@ impl UncompiledFunction {
         }
     }
     #[inline(always)]
-    /// Make an instruction that allocates enough bytes for the type `T` from the stack
+    /// Make an instruction that allocates enough bytes for the type `T` from the stack,
+    /// and yields a pointer to this allocated space.
     pub fn insn_alloca_of<T>(&self) -> &Val where T: Sized {
         self.insn_alloca(self.insn_of(mem::size_of::<T>()))
     }

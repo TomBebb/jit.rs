@@ -1,7 +1,8 @@
 use libc::*;
 use std::fmt::Error;
-use std::{mem, str};
-
+use std::ffi::CStr;
+use std::{mem, ptr, str};
+use std::ops::{Deref, Drop};
 pub fn oom() -> ! {
     panic!("out of memory")
 }
@@ -46,4 +47,37 @@ pub fn from_ptr_opt<R, T>(ptr: *mut T) -> Option<R> where R:From<*mut T> {
 }
 pub fn from_ptr<R, T>(ptr: *mut T) -> R where R:From<*mut T> {
     From::from(ptr)
+}
+
+pub struct CString {
+    ptr: *mut c_char
+}
+impl CString {
+    pub unsafe fn from_ptr(v: *mut c_char) -> CString {
+        CString {
+            ptr: v
+        }
+    }
+}
+impl<'a> From<&'a str> for CString {
+    fn from(text: &'a str) -> CString {
+        unsafe {
+            let bytes = text.as_bytes();
+            let new_bytes: *mut c_char = malloc(bytes.len() + 1) as *mut c_char;
+            ptr::copy(bytes.as_ptr() as *const c_char, new_bytes, bytes.len());
+            ptr::write(new_bytes.offset(bytes.len() as isize), 0);
+            CString::from_ptr(new_bytes)
+        }
+    }
+}
+impl Deref for CString {
+    type Target = CStr;
+    fn deref(&self) -> &CStr {
+        unsafe { CStr::from_ptr(self.ptr as *const c_char) }
+    }
+}
+impl Drop for CString {
+    fn drop(&mut self) {
+        unsafe { free(self.ptr as *mut c_void) };
+    }
 }
