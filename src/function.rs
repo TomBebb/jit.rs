@@ -2,7 +2,7 @@ use raw::*;
 use context::{Context, ContextMember};
 use compile::Compile;
 use label::Label;
-use types::Ty;
+use types::{Ty, Type, Field};
 use insn::Block;
 use value::Val;
 use util::{self, CString, from_ptr, from_ptr_opt};
@@ -12,6 +12,8 @@ use std::os::raw::{
     c_uint,
     c_void
 };
+use std::raw::TraitObject;
+use std::any::Any;
 use std::default::Default;
 use std::fmt;
 use std::ops::{Deref, DerefMut, Index};
@@ -102,32 +104,29 @@ impl fmt::Debug for CompiledFunction {
 }
 impl CompiledFunction {
     /// Run a closure with the compiled function as an argument
-    pub fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> where R: Compile<'a> {
-        if cfg!(debug_assertions) {
-            let sig = func.get_signature();
-            assert_eq!(sig.get_return(), Some(&*::get::<R>()));
-        }
+    pub fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> where A:Compile<'a>, R: Compile<'a> {
+        util::assert_sig::<'a, A, R>(&func.get_signature());
         unsafe {
             let func: fn(A) -> R = mem::transmute(jit_function_to_closure(func.as_ptr()));
             mem::transmute(&func as &Fn(A) -> R)
         }
     }
-    /// Run the compiled function with no arguments
-    pub fn apply0<'a, R>(&'a self) -> R {
-        unsafe {
-            let mut args = [];
-            let mut ret: R = mem::uninitialized();
-            jit_function_apply(self.into(), args.as_mut_ptr() as *mut *mut c_void, mem::transmute(&mut ret));
-            ret
+    /// Run the compiled function with several arguments.
+    pub fn apply<'a, R>(&'a self, args: &[&Any], ret: &mut R) where R: Compile<'a> {
+        if cfg!(debug_assertions) {
+            let sig = self.get_signature();
+            let ret: Option<Type> = sig.get_return().map(|x| x.to_owned());
+            let r: Type = ::get::<R>().into_owned();
+            let num_sig_args = sig.params().count();
+            assert!(args.len() == num_sig_args, "{:?} expects {} args, but got {}", sig, num_sig_args, args.len());
+            assert!(ret.as_ref() == Some(&r), "{:?} returns {:?}, but got {:?}", sig, ret, r);
         }
-    }
-    /// Run the compiled function with a single argument.
-    pub fn apply1<'a, A, R>(&'a self, arg: A) -> R {
         unsafe {
-            let mut args = [arg];
-            let mut ret: R = mem::uninitialized();
-            jit_function_apply(self.into(), args.as_mut_ptr() as *mut *mut c_void, mem::transmute(&mut ret));
-            ret
+            let mut nargs:Vec<_> = args.iter().map(|v| {
+                let obj: TraitObject = mem::transmute(*v);
+                obj.data as *mut c_void
+            }).collect();
+            jit_function_apply(self.into(), nargs.as_mut_ptr(), ret as *mut R as *mut c_void);
         }
     }
 }

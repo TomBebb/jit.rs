@@ -96,13 +96,6 @@ macro_rules! compile_prims(
 
 macro_rules! native_ref(
     (&$name:ident = $alias:ty) => (
-        impl Eq for $name {}
-        impl PartialEq for $name {
-            fn eq(&self, other: &$name) -> bool {
-                use std::mem::transmute as cast;
-                unsafe { cast::<_, isize>(self) == cast(other) }
-            }
-        }
         impl<'a> From<&'a $name> for $alias {
             fn from(ty: &'a $name) -> $alias {
                 use std::mem::transmute as cast;
@@ -121,6 +114,16 @@ macro_rules! native_ref(
                 unsafe { cast(ty) }
             }
         }
+    );
+    (comparable &$name:ident = $alias:ty) => (
+        impl Eq for $name {}
+        impl PartialEq for $name {
+            fn eq(&self, other: &$name) -> bool {
+                use std::mem::transmute as cast;
+                unsafe { cast::<_, isize>(self) == cast(other) }
+            }
+        }
+        native_ref!(&$name = $alias)
     );
     ($name:ident, $field:ident: $pointer_ty:ty) => (
         impl<'a> From<&'a mut $name> for $pointer_ty {

@@ -6,6 +6,7 @@ use util::{from_ptr, from_ptr_opt};
 use std::borrow::*;
 use std::marker::PhantomData;
 use std::{fmt, mem, str};
+use std::cmp::{PartialEq, Eq};
 use std::iter::IntoIterator;
 use std::ffi::{self, CString};
 use std::ops::{Deref, DerefMut};
@@ -286,6 +287,7 @@ impl<'a> Iterator for Params<'a> {
 /// to the inner `Ty`.
 pub struct Ty(PhantomData<[()]>);
 native_ref!(&Ty = jit_type_t);
+impl Eq for Ty {}
 impl ToOwned for Ty {
     type Owned = Type;
     fn to_owned(&self) -> Type {
@@ -299,6 +301,16 @@ impl Borrow<Ty> for Type {
         unsafe {
             mem::transmute(self._type)
         }
+    }
+}
+impl PartialEq for Ty {
+    fn eq(&self, other: &Ty) -> bool {
+        let self_kind = self.get_kind();
+        let other_kind = other.get_kind();
+        (self_kind == other_kind && self.is_primitive() || self.is_pointer()) || (
+            (self.is_struct() && self.fields().zip(other.fields()).filter(|&(ref self_f, ref other_f)| !self_f.get_type().eq(other_f.get_type())).count() == 0) ||
+            (self.is_signature() && self.get_return().unwrap() == other.get_return().unwrap())
+        )
     }
 }
 

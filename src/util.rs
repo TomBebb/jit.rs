@@ -3,8 +3,31 @@ use std::fmt::Error;
 use std::ffi::CStr;
 use std::{mem, ptr, str};
 use std::ops::{Deref, Drop};
+use compile::Compile;
+use types::Ty;
 pub fn oom() -> ! {
     panic!("out of memory")
+}
+
+#[inline]
+#[cfg(debug_assertions)]
+pub fn assert_sig<'a, A, R>(sig: &Ty) where A: Compile<'a>, R: Compile<'a> {
+    let (a, r) = (::get::<A>(), ::get::<R>());
+    let args:Vec<&Ty> = sig.params().collect();
+    if args.len() == 1 {
+        assert!(args[0] == &*a, "argument #0 to {:?} should be {:?}, but got {:?}", sig, &*a, args[0]);
+    } else if args.len() >= 2 {
+        assert!(args.len() == a.fields().count(), "{:?} takes {} arguments, but got {}", sig, args.len(), a.fields().count());
+        for (index, (a, b)) in args.into_iter().zip(a.fields().map(|f| f.get_type())).enumerate() {
+            assert!(a == b, "argument #{} to {:?} should be {:?}, but got {:?}", index, sig, &*b, &*a);
+        }
+    }
+    assert_eq!(sig.get_return(), Some(&*r));
+}
+
+#[inline(always)]
+#[cfg(not(debug_assertions))]
+pub fn assert_sig<'a, A, R>(_: &Ty) where A: Compile<'a>, R: Compile<'a> {
 }
 
 pub fn dump<F>(cb: F) -> Result<String, Error> where F:FnOnce(*mut FILE) {

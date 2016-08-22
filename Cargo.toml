@@ -17,9 +17,11 @@ name = "jit"
 path = "src/jit.rs"
 
 [dependencies]
-cbox = "0.*"
 bitflags = "0.7"
 libc = "*"
+
+[dependencies.cbox]
+git = "https://github.com/TomBebb/cbox-rs"
 
 [dependencies.libjit-sys]
 path = "sys"
