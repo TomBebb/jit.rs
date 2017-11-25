@@ -1,11 +1,9 @@
-extern crate hyper;
 extern crate jit;
 
-use hyper::client::Client;
 use jit::*;
 use std::cell::RefCell;
 use std::io::prelude::*;
-use std::io::{BufReader, BufWriter, self};
+use std::io::{BufReader, self};
 use std::fs::File;
 use std::iter::Peekable;
 use std::mem;
@@ -67,19 +65,17 @@ fn generate(func: &UncompiledFunction, code_text: &str) {
     let mut data = func.insn_dup(&func[0]);
     let mut current_loop = None;
     let mut code = code_text.chars().enumerate().peekable();
-    let input = io::stdin();
-    let input = BufReader::new(input.lock());
-    let mut input = input.bytes();
-    let output = io::stdout();
-    let mut output = BufWriter::new(output.lock());
-    let mut put_char = move |c: Cell| {
-        output.write_all(&[c]).unwrap();
+    extern fn put_char(c: Cell) -> () {
+        let mut stdout = io::stdout();
+        stdout.write_all(&[c]).unwrap();
         if c == b'\n' || c == b'\r' {
-            output.flush().unwrap();
+            stdout.flush().unwrap();
         }
     };
-    let mut get_char = move ||
-        input.next().map(Result::unwrap).unwrap_or(0);
+    extern fn get_char(_: ()) -> Cell {
+        let next = io::stdin().bytes().next().unwrap();
+        next.unwrap_or(0)
+    }
     while let Some((offset, c)) = code.next() {
         match c {
             '>' => {
@@ -106,10 +102,10 @@ fn generate(func: &UncompiledFunction, code_text: &str) {
             },
             '.' => {
                 let value = func.insn_load_relative(data, 0, &cell_t);
-                func.insn_call_rust_mut(Some("putchar"), &mut put_char, &[value], flags::NO_THROW);
+                func.insn_call_rust(Some("putchar"), put_char, &[value], CallFlags::NO_THROW);
             },
             ',' => {
-                let value = func.insn_call_rust_mut(Some("getchar"), &mut get_char, &[], flags::NO_THROW);
+                let value = func.insn_call_rust(Some("getchar"), get_char, &[], CallFlags::NO_THROW);
                 func.insn_store_relative(data, 0, value);
             },
             '[' => {
@@ -163,7 +159,7 @@ fn open_file(mut ctx: &mut Context, file: &str) {
     // run `text`
     run(&mut ctx, text.trim());
 }
-fn prompt<W, R>(output: &mut W, input: &mut R, mut text: &mut String) -> io::Result<()> where W: Write, R: BufRead {
+fn prompt<W, R>(output: &mut W, input: &mut R, text: &mut String) -> io::Result<()> where W: Write, R: BufRead {
     text.clear();
     try!(output.write(PROMPT.as_bytes()));
     try!(output.flush());
@@ -176,13 +172,6 @@ fn prompt_for<W, R>(output: &mut W, input: &mut R, mut text: &mut String, openee
     input.read_line(&mut text).map(|_| ())
 }
 
-fn run_url(mut ctx: &mut Context, url: &str) {
-    let client = Client::new();
-    let mut code = String::new();
-    let mut res = client.get(url).send().unwrap();
-    res.read_to_string(&mut code).unwrap();
-    run(&mut ctx, &code);
-}
 
 fn main() {
     // make a new context to make functions on
@@ -190,7 +179,6 @@ fn main() {
     let args:Vec<String> = env::args().skip(1).collect();
     match args.get(0).map(String::as_str) {
         Some("file") => open_file(&mut ctx, &args[1]),
-        Some("url") => run_url(&mut ctx, &args[1]),
         _ => {
             // get i/o streams
             let mut input = BufReader::new(io::stdin());
@@ -205,10 +193,6 @@ fn main() {
                     "file" => {
                         prompt_for(&mut output, &mut input, &mut line, "file").unwrap();
                         open_file(&mut ctx, &line);
-                    },
-                    "url" => {
-                        prompt_for(&mut output, &mut input, &mut line, "URL").unwrap();
-                        run_url(&mut ctx, &line);
                     },
                     _ => run(&mut ctx, &line)
                 }

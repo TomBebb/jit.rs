@@ -819,7 +819,7 @@ impl UncompiledFunction {
         }
     }
     #[inline(always)]
-    /// Make an instruction that moves memory from a source address to a destination address
+    /// Make an instruction that moves `size` bytes from a `source` address to a `dest` address
     pub fn insn_memmove(&self, dest: &Val, source: &Val, size: &Val) -> bool {
         expect!(insn_memmove, dest, source, size);
         unsafe {
