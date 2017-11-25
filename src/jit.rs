@@ -31,9 +31,8 @@
 //! For example, here's a quick example which makes a multiply function using LibJIT:
 //!
 //! ```rust
+//! #[macro_use]
 //! extern crate jit;
-//! #[no_link] #[macro_use]
-//! extern crate jit_macros;
 //! use jit::*;
 //! fn main() {
 //!     // make a new context to make functions on
@@ -114,3 +113,141 @@ mod label;
 mod types;
 mod util;
 mod value;
+
+
+#[macro_export]
+/// Construct a JIT struct with the fields given
+macro_rules! jit_struct(
+    ($($name:ident: $ty:ty),*) => ({
+        let mut ty = Type::new_struct(&mut [
+            $(&get::<$ty>()),*
+        ]);
+        ty.set_names(&[$(stringify!($name)),*]);
+        ty
+    });
+    ($($ty:ty),+ ) => (
+        Type::new_struct(&mut [
+            $(&get::<$ty>()),+
+        ])
+    )
+);
+
+#[macro_export]
+/// Construct a JIT union with the fields given
+macro_rules! jit_union(
+    ($($name:ident: $ty:ty),*) => ({
+        let union = Type::new_union(&mut [
+            $(&get::<$ty>()),*
+        ]);
+        union.set_names(&[$(stringify!($name)),*]);
+        union
+    });
+    ($($ty:ty),+ ) => (
+        Type::new_union(&mut [
+            $(&get::<$ty>()),*
+        ])
+    )
+);
+#[macro_export]
+/// Construct a JIT function signature with the arguments and return type given
+macro_rules! jit_fn(
+    (($($arg:ty),*) -> $ret:ty) => ({
+        use std::default::Default;
+        Type::new_signature(Default::default(), &get::<$ret>(), &mut [
+            $(&get::<$arg>()),*
+        ])
+    });
+);
+
+#[macro_export]
+macro_rules! jit(
+    ($func:ident, return) => (
+        $func.insn_default_return()
+    );
+    ($func:ident, return $($t:tt)+) => (
+        $func.insn_return(jit!($func, $($t)+))
+    );
+    ($func:ident, $var:ident += $($t:tt)+) => (
+        $func.insn_store($var, &$func.insn_add($var, jit!($func, $($t)+)));
+    );
+    ($func:ident, $var:ident -= $($t:tt)+) => (
+        $func.insn_store($var, &$func.insn_sub($var, jit!($func, $($t)+)));
+    );
+    ($func:ident, $var:ident *= $($t:tt)+) => (
+        $func.insn_store($var, &$func.insn_mul($var, jit!($func, $($t)+)));
+    );
+    ($func:ident, $var:ident /= $($t:tt)+) => (
+        $func.insn_store($var, &$func.insn_div($var, jit!($func, $($t)+)));
+    );
+    ($func:ident, $($a:tt)+ + $($b:tt)+) => (
+        $func.insn_add(jit!($func, $($a)+), jit!($func, $($b)+))
+    );
+    ($func:ident, $($a:tt)+ - $($b:tt)+) => (
+        $func.insn_sub(jit!($func, $($a)+), jit!($func, $($b)+))
+    );
+    ($func:ident, $($a:tt)+ * $($b:tt)+) => (
+        $func.insn_mul(jit!($func, $($a)+), jit!($func, $($b)+))
+    );
+    ($func:ident, $($a:tt)+ / $($b:tt)+) => (
+        $func.insn_div(jit!($func, $($a)+), jit!($func, $($b)+))
+    );
+    ($func:ident, $($a:tt)+ % $($b:tt)+) => (
+        $func.insn_rem(jit!($func, $($a)+), jit!($func, $($b)+))
+    );
+    ($func:ident, ($($t:tt)+).sqrt()) => (
+        $func.insn_sqrt(&jit!($func, $($t)+))
+    );
+    ($func:ident, $var:ident = $($t:tt)+) => (
+        $func.insn_store($var, jit!($func, $val));
+    );
+    ($func:ident, *$var:ident) => (
+        $func.insn_load($var)
+    );
+    ($func:ident, call($call:expr,
+        $($arg:expr),+
+    )) => (
+        $func.insn_call(None::<String>, $call, None, [$($arg),+].as_mut_slice())
+    );
+    ($func:ident, jump_table($value:expr,
+        $($label:ident),+
+    )) => (
+    let ($($label),+) = {
+        $(let $label:Label = Label::new($func);)+
+        $func.insn_jump_table($value, [
+            $($label),+
+        ].as_mut_slice());
+        ($($label),+)
+    });
+);
+#[macro_export]
+macro_rules! jit_func(
+    ($ctx:expr, $name:ident, fn() -> $ret:ty {$($st:stmt;)+}, $value:expr) => ({
+        use jit::*;
+        let func = UncompiledFunction::new($ctx, &get::<fn() -> $ret>());
+        {
+            let $name = &func;
+            $($st;)+
+        };
+        let func = UncompiledFunction::compile(func);
+        let $name: extern fn(()) -> $ret = func.as_func(); 
+        let $name: extern fn() -> $ret = unsafe { ::std::mem::transmute($name) };
+        $value
+    });
+    ($ctx:expr, $name:ident, fn($($arg:ident:$ty:ty),+) -> $ret:ty {$($st:stmt;)+}, $value:expr) => ({
+        use jit::*;
+        let func = UncompiledFunction::new($ctx, &get::<fn($($ty),+) -> $ret>());
+        {
+            let $name = &func;
+            let mut i = 0;
+            $(let $arg = {
+                i += 1;
+                &$name[i - 1]
+            };)*
+            $($st;)+
+        };
+        let func = UncompiledFunction::compile(func);
+        let $name: extern fn(($($ty),+)) -> $ret = func.as_func();
+        let $name: extern fn($($ty),+) -> $ret = unsafe { ::std::mem::transmute($name) };
+        $value
+    });
+);

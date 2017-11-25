@@ -1,36 +1,42 @@
-#[no_link] #[macro_use]
+#[macro_use]
 extern crate jit_macros;
 extern crate jit;
 use jit::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[repr(packed)]
-pub struct Position(f64, f64);
-impl<'a> Compile<'a> for Position {
-    fn compile(self, func:&'a UncompiledFunction) -> &'a Val {
-        Val::new_struct(func, &Self::get_type(), &[func.insn_of(self.0), func.insn_of(self.1)])
-    }
-    fn get_type() -> CowType<'a> {
-        let f64_t = get::<f64>();
-        let mut ty = Type::new_struct(&mut [&f64_t, &f64_t]);
-        ty.set_names(&["x", "y"]);
-        ty.into()
-    }
-}
 
+#[repr(packed)]
+#[derive(Compile)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64
+}
 
 #[test]
 fn test_struct() {
     let mut ctx = Context::<()>::new();
     jit_func!(&mut ctx, func, fn(pos: *mut Position, mult: f64) -> () {
-        let mut x = &pos["x"];
-        let mut y = &pos["y"];
-        x *= mult;
-        y *= mult;
+        let pos_ty = pos.get_type().get_ref().unwrap();
+        println!("{:?}", pos_ty);
+        println!("{:?}", pos_ty);
+        println!("{}", pos_ty.fields().count());
+        for field in pos_ty.fields() {
+            println!("{:?}: {:?}: {:?}", field.get_name(), field.get_type(), field.get_offset());
+        };
+        let x = pos_ty.get_field("x").unwrap();
+        let y = pos_ty.get_field("y").unwrap();
+        func.insn_store_relative(pos, x.get_offset(), func.insn_mul(&pos["x"], mult));
+        func.insn_store_relative(pos, y.get_offset(), func.insn_mul(&pos["y"], mult));
     }, {
-        let mut pos = Position(1., 2.);
+        let mut pos = Position {
+            x: 1.,
+            y: 2.
+        };
         func(&mut pos, 2.);
-        assert_eq!(pos, Position(2., 4.));
+        assert_eq!(pos, Position {
+            x: 2.,
+            y: 4.
+        });
     });
 }
 

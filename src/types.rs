@@ -218,6 +218,7 @@ impl<'a> Fields<'a> {
 impl<'a> Iterator for Fields<'a> {
     type Item = Field<'a>;
     fn next(&mut self) -> Option<Field<'a>> {
+        println!("{} / {}", self.index, self.length);
         if self.index < self.length {
             let index = self.index;
             self.index += 1;

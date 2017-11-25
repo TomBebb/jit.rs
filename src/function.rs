@@ -105,10 +105,12 @@ impl fmt::Debug for CompiledFunction {
     }
 }
 impl CompiledFunction {
-    /// Run a closure with the compiled function as an argument
-    pub unsafe fn to_function<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> extern fn(A) -> R where A:Compile<'a>, R: Compile<'a> {
-        util::assert_sig::<A, R>(&func.get_signature());
-        mem::transmute(jit_function_to_closure(func.as_ptr()))
+    /// Retrieve this function's compiled form so it can be called
+    pub fn as_func<'a, A, R>(&self) -> extern fn(A) -> R where A:Compile<'a>, R: Compile<'a> {
+        util::assert_sig::<A, R>(&self.get_signature());
+        unsafe {
+            mem::transmute(jit_function_to_closure(mem::transmute(self)))
+        }
     }
     /// Run the compiled function with several arguments.
     pub fn apply<'a, R>(&'a self, args: &[&Any], ret: &mut R) where R: Compile<'a> {
@@ -501,10 +503,13 @@ impl UncompiledFunction {
     }
     #[inline(always)]
     /// Make an instruction that loads a value of the given type from `value + offset`, where
-    /// `value` must be a pointer
+    /// `value` must be a pointer, or a struct
     pub fn insn_load_relative(&self, value: &Val, offset: usize, ty: &Ty) -> &Val {
         if cfg!(debug_assertions) && !value.get_type().is_pointer() {
-            panic!("Value given to insn_load_relative should be pointer, got {:?}", value.get_type());
+            let ty = value.get_type();
+            if !ty.is_pointer() && !ty.is_struct() {
+                panic!("Value given to insn_load_relative should be pointer or struct, got {:?}", ty);
+            }
         }
         unsafe {
             from_ptr(jit_insn_load_relative(

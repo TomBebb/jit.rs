@@ -1,5 +1,3 @@
-#[no_link] #[macro_use]
-extern crate jit_macros;
 extern crate jit;
 use jit::*;
 

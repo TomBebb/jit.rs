@@ -1,8 +1,5 @@
-#![feature(test)]
-#[no_link] #[macro_use]
-extern crate jit_macros;
+#[macro_use]
 extern crate jit;
-extern crate test;
 use jit::*;
 use std::default::Default;
 macro_rules! test_compile(
@@ -11,7 +8,7 @@ macro_rules! test_compile(
         fn $test_name() {
             let default_value:$ty = Default::default();
             let ty = get::<$ty>();
-            assert!(ty.get_kind().contains(kind::$kind));
+            assert!(ty.get_kind().contains(TypeKind::$kind));
             assert_eq!(typecs::$id(), &*ty);
             let mut ctx = Context::<()>::new();
             jit_func!(&mut ctx, gen, fn() -> $ty {
