@@ -24,7 +24,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #![crate_name = "jit"]
-#![feature(unboxed_closures, associated_consts, fn_traits, raw)]
 #![allow(non_camel_case_types, non_upper_case_globals)]
 #![deny(unused_attributes, dead_code, unused_parens, unknown_lints, unreachable_code, unused_allocation, unused_allocation, unused_must_use)]
 
@@ -52,6 +51,7 @@ extern crate bitflags;
 extern crate cbox;
 extern crate libc;
 extern crate libjit_sys as raw;
+extern crate traitobject;
 use raw::*;
 use std::os::raw::c_void;
 use std::mem;
@@ -62,8 +62,8 @@ pub use function::{flags, Abi, UncompiledFunction, Func, CompiledFunction};
 pub use function::flags::CallFlags;
 pub use label::Label;
 pub use insn::{Block, Instruction, InstructionIter};
-pub use types::kind::TypeKind;
-pub use types::{kind, get, Type, Field, Fields, Params, CowType, StaticType, Ty, TaggedType};
+pub use types::TypeKind;
+pub use types::{get, Type, Field, Fields, Params, CowType, StaticType, Ty, TaggedType};
 pub use types::consts as typecs;
 pub use value::Val;
 

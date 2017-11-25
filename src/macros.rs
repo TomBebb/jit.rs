@@ -254,7 +254,7 @@ macro_rules! dispose {
 macro_rules! builtin_type(
     ($c_name:ident -> $rust_name:ident) => (
         pub fn $rust_name() -> StaticType {
-            from_ptr($c_name)
+            unsafe { from_ptr($c_name) }
         }
     )
 );

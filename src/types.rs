@@ -1,7 +1,7 @@
 use raw::*;
 use compile::Compile;
 use function::Abi;
-use  std::os::raw::{c_char, c_uint, c_void};
+use  std::os::raw::{c_char, c_uint, c_int, c_void};
 use util::{from_ptr, from_ptr_opt};
 use std::borrow::*;
 use std::marker::PhantomData;
@@ -11,48 +11,42 @@ use std::iter::IntoIterator;
 use std::ffi::{self, CString};
 use std::ops::{Deref, DerefMut};
 
-pub use kind::TypeKind;
 /// The integer representation of a type
-pub mod kind {
-    use 
-std::os::raw::c_int;
-    bitflags!(
-        pub flags TypeKind: c_int {
-            const Void = 0,
-            const SByte = 1,
-            const UByte = 2,
-            const Short = 3,
-            const UShort = 4,
-            const Int = 5,
-            const UInt = 6,
-            const NInt = 7,
-            const NUInt = 8,
-            const Long = 9,
-            const ULong = 10,
-            const Float32 = 11,
-            const Float64 = 12,
-            const NFloat = 13,
-            const Struct = 14,
-            const Union = 15,
-            const Signature = 16,
-            const Pointer = 17,
-            const FirstTagged = 2,
-            const SysBool = 10009,
-            const SysChar = 10010
-        }
-    );
-}
+bitflags!(
+    pub struct TypeKind: c_int {
+        const Void = 0;
+        const SByte = 1;
+        const UByte = 2;
+        const Short = 3;
+        const UShort = 4;
+        const Int = 5;
+        const UInt = 6;
+        const NInt = 7;
+        const NUInt = 8;
+        const Long = 9;
+        const ULong = 10;
+        const Float32 = 11;
+        const Float64 = 12;
+        const NFloat = 13;
+        const Struct = 14;
+        const Union = 15;
+        const Signature = 16;
+        const Pointer = 17;
+        const FirstTagged = 2;
+        const SysBool = 10009;
+        const SysChar = 10010;
+    }); 
 impl fmt::Debug for Ty {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let kind = self.get_kind();
-        if kind.contains(kind::SysChar) {
+        if kind.contains(TypeKind::SysChar) {
             fmt.write_str("char")
-        } else if kind.contains(kind::SysBool) {
+        } else if kind.contains(TypeKind::SysBool) {
             fmt.write_str("bool")
-        } else if kind.contains(kind::Pointer) {
+        } else if kind.contains(TypeKind::Pointer) {
             try!(fmt.write_str("&mut"));
             write!(fmt, "&mut {:?}", self.get_ref().unwrap())
-        } else if kind.contains(kind::Signature) {
+        } else if kind.contains(TypeKind::Signature) {
             try!(fmt.write_str("fn("));
             let params = self.params();
             let (size, _) = params.size_hint();
@@ -64,12 +58,12 @@ impl fmt::Debug for Ty {
             }
             try!(fmt.write_str(")"));
             if let Some(x) = self.get_return() {
-                if !x.get_kind().contains(kind::Void) {
+                if !x.get_kind().contains(TypeKind::Void) {
                     try!(write!(fmt, " -> {:?}", x))
                 }
             }
             Ok(())
-        } else if kind.contains(kind::Struct) {
+        } else if kind.contains(TypeKind::Struct) {
             try!(fmt.write_str("("));
             let fields = self.fields();
             let (size, _) = fields.size_hint();
@@ -80,7 +74,7 @@ impl fmt::Debug for Ty {
                 }
             }
             fmt.write_str(")")
-        } else if kind.contains(kind::Union) {
+        } else if kind.contains(TypeKind::Union) {
             try!(fmt.write_str("union("));
             let fields = self.fields();
             let (size, _) = fields.size_hint();
@@ -91,31 +85,31 @@ impl fmt::Debug for Ty {
                 }
             }
             fmt.write_str(")")
-        } else if kind.contains(kind::NFloat) {
+        } else if kind.contains(TypeKind::NFloat) {
             fmt.write_str("float")
-        } else if kind.contains(kind::Float32) {
+        } else if kind.contains(TypeKind::Float32) {
             fmt.write_str("f32")
-        } else if kind.contains(kind::Float64) {
+        } else if kind.contains(TypeKind::Float64) {
             fmt.write_str("f64")
-        } else if kind.contains(kind::ULong) {
+        } else if kind.contains(TypeKind::ULong) {
             fmt.write_str("u64")
-        } else if kind.contains(kind::Long) {
+        } else if kind.contains(TypeKind::Long) {
             fmt.write_str("i64")
-        } else if kind.contains(kind::NUInt) {
+        } else if kind.contains(TypeKind::NUInt) {
             fmt.write_str("usize")
-        } else if kind.contains(kind::NInt) {
+        } else if kind.contains(TypeKind::NInt) {
             fmt.write_str("isize")
-        } else if kind.contains(kind::UInt) {
+        } else if kind.contains(TypeKind::UInt) {
             fmt.write_str("u32")
-        } else if kind.contains(kind::Int) {
+        } else if kind.contains(TypeKind::Int) {
             fmt.write_str("i32")
-        } else if kind.contains(kind::UShort) {
+        } else if kind.contains(TypeKind::UShort) {
             fmt.write_str("u16")
-        } else if kind.contains(kind::Short) {
+        } else if kind.contains(TypeKind::Short) {
             fmt.write_str("i16")
-        } else if kind.contains(kind::UByte) {
+        } else if kind.contains(TypeKind::UByte) {
             fmt.write_str("u8")
-        } else if kind.contains(kind::SByte) {
+        } else if kind.contains(TypeKind::SByte) {
             fmt.write_str("i8")
         } else {
             fmt.write_str("()")
@@ -421,7 +415,7 @@ impl Ty {
     #[inline]
     /// Get a value that indicates the kind of this type. This allows callers to
     /// quickly classify a type to determine how it should be handled further.
-    pub fn get_kind(&self) -> kind::TypeKind {
+    pub fn get_kind(&self) -> TypeKind {
         unsafe {
             mem::transmute(jit_type_get_kind(self.into()))
         }
@@ -532,7 +526,7 @@ impl Ty {
     /// ```
     pub fn is_float(&self) -> bool {
         let kind = self.get_kind();
-        kind.contains(kind::NFloat) || kind.contains(kind::Float32) || kind.contains(kind::Float64)
+        kind.contains(TypeKind::NFloat) || kind.contains(TypeKind::Float32) || kind.contains(TypeKind::Float64)
     }
     /// Check if this is an integer
     ///
@@ -646,7 +640,7 @@ impl<T> From<jit_type_t> for TaggedType<T> {
 }
 impl<T> TaggedType<T> {
     /// Create a new tagged type
-    pub fn new(ty:&Ty, kind: kind::TypeKind, data: Box<T>) -> TaggedType<T> {
+    pub fn new(ty:&Ty, kind: TypeKind, data: Box<T>) -> TaggedType<T> {
         unsafe {
             let free_data:extern fn(*mut c_void) = ::free_data::<T>;
             let ty = jit_type_create_tagged(ty.into(), kind.bits(), mem::transmute(&*data), Some(free_data), 1);

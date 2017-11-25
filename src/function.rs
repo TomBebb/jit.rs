@@ -2,7 +2,7 @@ use raw::*;
 use context::{Context, ContextMember};
 use compile::Compile;
 use label::Label;
-use types::{Ty, Type, Field};
+use types::{Ty, Type};
 use insn::Block;
 use value::Val;
 use util::{self, CString, from_ptr, from_ptr_opt};
@@ -12,7 +12,6 @@ use std::os::raw::{
     c_uint,
     c_void
 };
-use std::raw::TraitObject;
 use std::any::Any;
 use std::default::Default;
 use std::fmt;
@@ -20,6 +19,9 @@ use std::ops::{Deref, DerefMut, Index};
 use std::{mem, ptr};
 
 use std::marker::PhantomData;
+
+use traitobject;
+
 /// A platform's application binary interface
 ///
 /// This describes how the function should be called
@@ -40,23 +42,23 @@ impl Default for Abi {
         Abi::CDecl
     }
 }
+
 /// Call flags to a function
 pub mod flags {
-    use 
-std::os::raw::c_int;
+    use  std::os::raw::c_int;
     /// Call flags to a function
     bitflags!(
-        pub flags CallFlags: c_int {
+        pub struct CallFlags: c_int {
             /// When the function won't throw a value
-            const NO_THROW = 1,
+            const NO_THROW = 1;
             /// When the function won't return a value
-            const NO_RETURN = 2,
+            const NO_RETURN = 2;
             /// When the function is tail-recursive
-            const TAIL = 4
+            const TAIL = 4;
         }
     );
 }
-/// A function
+/// Any kind of function, compiled or not
 pub struct Func(PhantomData<[()]>);
 native_ref!(&Func = jit_function_t);
 impl ContextMember for Func {
@@ -104,12 +106,9 @@ impl fmt::Debug for CompiledFunction {
 }
 impl CompiledFunction {
     /// Run a closure with the compiled function as an argument
-    pub fn to_closure<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> &'a Fn<A, Output = R> where A:Compile<'a>, R: Compile<'a> {
-        util::assert_sig::<'a, A, R>(&func.get_signature());
-        unsafe {
-            let func: fn(A) -> R = mem::transmute(jit_function_to_closure(func.as_ptr()));
-            mem::transmute(&func as &Fn(A) -> R)
-        }
+    pub unsafe fn to_function<'a, A, R>(func: CSemiBox<'a, CompiledFunction>) -> extern fn(A) -> R where A:Compile<'a>, R: Compile<'a> {
+        util::assert_sig::<A, R>(&func.get_signature());
+        mem::transmute(jit_function_to_closure(func.as_ptr()))
     }
     /// Run the compiled function with several arguments.
     pub fn apply<'a, R>(&'a self, args: &[&Any], ret: &mut R) where R: Compile<'a> {
@@ -123,10 +122,9 @@ impl CompiledFunction {
         }
         unsafe {
             let mut nargs:Vec<_> = args.iter().map(|v| {
-                let obj: TraitObject = mem::transmute(*v);
-                obj.data as *mut c_void
+                traitobject::data(v)
             }).collect();
-            jit_function_apply(self.into(), nargs.as_mut_ptr(), ret as *mut R as *mut c_void);
+            jit_function_apply(self.into(), nargs.as_mut_ptr() as *mut *mut c_void, ret as *mut R as *mut c_void);
         }
     }
 }
@@ -782,15 +780,13 @@ impl UncompiledFunction {
             flags.bits()
         ))
     }
-    /// Make an instruction that calls a rust closure that has the signature
+    /// Make an instruction that calls a rust function that has the signature
     /// given with some arguments
-    pub fn insn_call_rust<'a, A, R, F>(&'a self, name: Option<&str>,
-                        func: &'a F,
-                        args: &[&Val], flags: flags::CallFlags) -> &Val where F:Fn<A, Output = R> + Sized, A:Compile<'a>, R:Compile<'a> {
-        let signature = ::get::<fn(*const (), A) -> R>();
-        let func_v = unsafe { mem::transmute::<_, *const ()>(func) }.compile(self);
+    pub fn insn_call_rust<'a, A, R>(&'a self, name: Option<&str>,
+                        func: extern fn(A) -> R,
+                        args: &[&Val], flags: flags::CallFlags) -> &Val where A:Compile<'a>, R:Compile<'a> {
+        let signature = ::get::<extern fn(A) -> R>();
         let mut args = Vec::from(args);
-        args.insert(0, func_v.into());
         /*
         if cfg!(debug_assertions) {
             let num_sig_args = signature.params().count();
@@ -807,39 +803,7 @@ impl UncompiledFunction {
         unsafe {
             self.insn_call_native(
                 name,
-                mem::transmute(F::call as extern "rust-call" fn(&F, A) -> R),
-                &signature,
-                &args,
-                flags
-            )
-        }
-    }
-    /// Make an instruction that calls a rust closure that has the signature
-    /// given with some arguments
-    pub fn insn_call_rust_mut<'a, A, R, F>(&'a self, name: Option<&str>,
-                        func: &'a mut F,
-                        args: &[&Val], flags: flags::CallFlags) -> &Val where F:FnMut<A, Output = R> + Sized, A:Compile<'a>, R:Compile<'a> {
-        let signature = ::get::<fn(*const (), A) -> R>();
-        let func_v = unsafe { mem::transmute::<_, *const ()>(func) }.compile(self);
-        let mut args = Vec::from(args);
-        args.insert(0, func_v.into());
-        /*
-        if cfg!(debug_assertions) {
-            let num_sig_args = signature.params().count();
-            if args.len() != num_sig_args {
-                panic!("Bad arguments to {:?} - expected {}, got {}", name, num_sig_args, args.len());
-            }
-            for (index, (arg, param)) in args.iter().zip(signature.params()).enumerate().skip(1) {
-                let ty = arg.get_type();
-                if ty != param {
-                    panic!("Bad argument #{} to {:?} - expected {:?}, got {:?}", index, name, param, ty);
-                }
-            }
-        }*/
-        unsafe {
-            self.insn_call_native(
-                name,
-                mem::transmute(F::call_mut as extern "rust-call" fn(&mut F, A) -> R),
+                mem::transmute(func),
                 &signature,
                 &args,
                 flags
