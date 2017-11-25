@@ -24,7 +24,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #![crate_name = "jit"]
-#![allow(non_camel_case_types, non_upper_case_globals)]
+#![allow(non_upper_case_globals)]
 #![deny(unused_attributes, dead_code, unused_parens, unknown_lints, unreachable_code, unused_allocation, unused_allocation, unused_must_use)]
 
 //! This crate wraps LibJIT in an idiomatic style.

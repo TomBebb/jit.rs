@@ -9,7 +9,7 @@ use std::{fmt, mem, str};
 use std::cmp::{PartialEq, Eq};
 use std::iter::IntoIterator;
 use std::ffi::{self, CString};
-use std::ops::{Deref, DerefMut};
+use std::ops::{Deref, DerefMut, Index};
 
 /// The integer representation of a type
 bitflags!(
@@ -608,6 +608,38 @@ impl Ty {
     pub fn remove_tags(&self) -> Type {
         unsafe {
             jit_type_remove_tags(self.into()).into()
+        }
+    }
+}
+impl Index<usize> for Ty {
+    type Output = Ty;
+    fn index(&self, index: usize) -> &Ty {
+        let mut ty = self;
+        while let Some(elem) = ty.get_ref() {
+            ty = elem;
+        }
+        if !ty.is_struct() {
+            panic!("{:?} cannot be indexed", ty);
+        } else if let Some(field) = ty.fields().nth(index) {
+            field.get_type()
+        } else {
+            panic!("unknown index {} on {:?}", index, ty)
+        }
+    }
+}
+impl<'a> Index<&'a str> for Ty {
+    type Output = Ty;
+    fn index(&self, index: &'a str) -> &Ty {
+        let mut ty = self;
+        while let Some(elem) = ty.get_ref() {
+            ty = elem;
+        }
+        if !ty.is_struct() {
+            panic!("{:?} cannot be indexed", ty);
+        } else if let Some(field) = ty.get_field(index) {
+            field.get_type()
+        } else {
+            panic!("unknown field {} on {:?}", index, ty)
         }
     }
 }

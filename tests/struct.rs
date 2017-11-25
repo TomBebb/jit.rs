@@ -17,16 +17,12 @@ fn test_struct() {
     let mut ctx = Context::<()>::new();
     jit_func!(&mut ctx, func, fn(pos: *mut Position, mult: f64) -> () {
         let pos_ty = pos.get_type().get_ref().unwrap();
-        println!("{:?}", pos_ty);
-        println!("{:?}", pos_ty);
-        println!("{}", pos_ty.fields().count());
-        for field in pos_ty.fields() {
-            println!("{:?}: {:?}: {:?}", field.get_name(), field.get_type(), field.get_offset());
-        };
         let x = pos_ty.get_field("x").unwrap();
         let y = pos_ty.get_field("y").unwrap();
-        func.insn_store_relative(pos, x.get_offset(), func.insn_mul(&pos["x"], mult));
-        func.insn_store_relative(pos, y.get_offset(), func.insn_mul(&pos["y"], mult));
+        let x_val = func.insn_load_relative(pos, x.get_offset(), x.get_type());
+        let y_val = func.insn_load_relative(pos, y.get_offset(), x.get_type());
+        func.insn_store_relative(pos, x.get_offset(), func.insn_mul(&x_val, mult));
+        func.insn_store_relative(pos, y.get_offset(), func.insn_mul(&y_val, mult));
     }, {
         let mut pos = Position {
             x: 1.,
