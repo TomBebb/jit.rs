@@ -786,7 +786,7 @@ impl UncompiledFunction {
                         func: extern fn(A) -> R,
                         args: &[&Val], flags: flags::CallFlags) -> &Val where A:Compile<'a>, R:Compile<'a> {
         let signature = ::get::<extern fn(A) -> R>();
-        let mut args = Vec::from(args);
+        let args = Vec::from(args);
         /*
         if cfg!(debug_assertions) {
             let num_sig_args = signature.params().count();
