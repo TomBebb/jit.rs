@@ -42,22 +42,17 @@ impl Default for Abi {
         Abi::CDecl
     }
 }
-
 /// Call flags to a function
-pub mod flags {
-    use  std::os::raw::c_int;
-    /// Call flags to a function
-    bitflags!(
-        pub struct CallFlags: c_int {
-            /// When the function won't throw a value
-            const NO_THROW = 1;
-            /// When the function won't return a value
-            const NO_RETURN = 2;
-            /// When the function is tail-recursive
-            const TAIL = 4;
-        }
-    );
-}
+bitflags!(
+    pub struct CallFlags: c_int {
+        /// When the function won't throw a value
+        const NO_THROW = 1;
+        /// When the function won't return a value
+        const NO_RETURN = 2;
+        /// When the function is tail-recursive
+        const TAIL = 4;
+    }
+);
 /// Any kind of function, compiled or not
 pub struct Func(PhantomData<[()]>);
 native_ref!(&Func = jit_function_t);
@@ -113,7 +108,7 @@ impl CompiledFunction {
         }
     }
     /// Run the compiled function with several arguments.
-    pub fn apply<'a, R>(&'a self, args: &[&Any], ret: &mut R) where R: Compile<'a> {
+    pub fn apply<'a, R>(&'a self, args: &[&Any]) -> R where R: Compile<'a> + Default {
         if cfg!(debug_assertions) {
             let sig = self.get_signature();
             let ret: Option<Type> = sig.get_return().map(|x| x.to_owned());
@@ -122,12 +117,14 @@ impl CompiledFunction {
             assert!(args.len() == num_sig_args, "{:?} expects {} args, but got {}", sig, num_sig_args, args.len());
             assert!(ret.as_ref() == Some(&r), "{:?} returns {:?}, but got {:?}", sig, ret, r);
         }
+        let mut ret: R = R::default();
         unsafe {
             let mut nargs:Vec<_> = args.iter().map(|v| {
                 traitobject::data(v)
             }).collect();
-            jit_function_apply(self.into(), nargs.as_mut_ptr() as *mut *mut c_void, ret as *mut R as *mut c_void);
+            jit_function_apply(self.into(), nargs.as_mut_ptr() as *mut *mut c_void, &mut ret as *mut R as *mut c_void);
         }
+        ret
     }
 }
 
@@ -731,7 +728,7 @@ impl UncompiledFunction {
 
     /// Call the function, which may or may not be translated yet
     pub fn insn_call(&self, name:Option<&str>, func:&Func, sig:Option<&Ty>,
-        args: &[&Val], flags: flags::CallFlags) -> &Val {
+        args: &[&Val], flags: CallFlags) -> &Val {
         let c_name = name.map(CString::from);
         unsafe {
             let native_args: &[jit_value_t] = mem::transmute(args);
@@ -751,7 +748,7 @@ impl UncompiledFunction {
     /// Make an instruction that calls a function that has the signature given
     /// with some arguments through a pointer to the function
     pub fn insn_call_indirect(&self, func:&Val, signature: &Ty,
-                               args: &[&Val], flags: flags::CallFlags) -> &Val {
+                               args: &[&Val], flags: CallFlags) -> &Val {
         if cfg!(debug_assertions) && !func.get_type().is_signature() {
             panic!("value of this type cannot be called {:?}", func);
         }
@@ -772,7 +769,7 @@ impl UncompiledFunction {
     /// Make an instruction that calls a native function that has the signature
     /// given with some arguments
     pub unsafe fn insn_call_native(&self, name: Option<&str>,
-                        func: *mut (), signature: &Ty, args: &[&Val], flags: flags::CallFlags) -> &Val {
+                        func: *mut (), signature: &Ty, args: &[&Val], flags: CallFlags) -> &Val {
         let c_sig: jit_type_t = signature.into();
         let c_name = name.map(CString::from);
         from_ptr(jit_insn_call_native(
@@ -789,7 +786,7 @@ impl UncompiledFunction {
     /// given with some arguments
     pub fn insn_call_rust<'a, A, R>(&'a self, name: Option<&str>,
                         func: extern fn(A) -> R,
-                        args: &[&Val], flags: flags::CallFlags) -> &Val where A:Compile<'a>, R:Compile<'a> {
+                        args: &[&Val], flags: CallFlags) -> &Val where A:Compile<'a>, R:Compile<'a> {
         let signature = ::get::<extern fn(A) -> R>();
         let args = Vec::from(args);
         /*
